@@ -12,7 +12,7 @@ from app.core.database import Base
 from app.db import models  # This triggers model registration
 
 from app.agent.checkpointer import agent_checkpointer
-from app.api.routers import health, opportunities
+from app.api.routers import health, opportunities, users, conversations
 from app.agent.endpoints import router as agent_router
 
 # Setup logging
@@ -64,6 +64,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router)
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(conversations.router, prefix="/api/v1")
 app.include_router(opportunities.router, prefix="/api/v1")
 app.include_router(agent_router)
 

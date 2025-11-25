@@ -1,18 +1,24 @@
 """Opportunity database model."""
 import enum
-from sqlalchemy import Column, Integer, String, Enum, Float, ForeignKey
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
+from sqlalchemy import Column, Integer, String, Enum as SQLEnum, Float, ForeignKey
+from sqlalchemy.orm import relationship, Mapped
 from app.core.database import Base
 
+if TYPE_CHECKING:
+    from app.db.models.user import User
+    from app.db.models.client import Client
+    from app.db.models.product import Product
 
-class Location(enum.Enum):
+
+class Location(str, enum.Enum):
     """Location enumeration."""
     USA = "USA"
     UK = "UK"
     INDIA = "India"
 
 
-class Stage(enum.Enum):
+class Stage(str, enum.Enum):
     """Opportunity stage enumeration."""
     LEAD = "Lead"
     QUALIFIED = "Qualified"
@@ -29,8 +35,8 @@ class Opportunity(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
-    location = Column(Enum(Location), nullable=False)
-    stage = Column(Enum(Stage), nullable=False, default=Stage.LEAD, index=True)
+    location = Column(SQLEnum(Location, native_enum=False, length=50), nullable=False)
+    stage = Column(SQLEnum(Stage, native_enum=False, length=50), nullable=False, default=Stage.LEAD, index=True)
     quote_amount = Column(Float, nullable=False, default=0.0)
     contract_months = Column(Integer)
     user_count = Column(Integer)
@@ -40,12 +46,12 @@ class Opportunity(Base):
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
     
-    # Relationships - use string references and lazy import of secondary table
-    creator_user = relationship("User", back_populates="opportunities")
-    client = relationship("Client", back_populates="opportunities")
-    products = relationship(
+    # Relationships
+    creator_user: "Mapped[User]" = relationship("User", back_populates="opportunities")
+    client: "Mapped[Client]" = relationship("Client", back_populates="opportunities")
+    products: "Mapped[list[Product]]" = relationship(
         "Product",
-        secondary="opportunity_product",  # Use string reference
+        secondary="opportunity_product",
         back_populates="opportunities"
     )
     

@@ -1,11 +1,11 @@
 """User database model."""
 import enum
-from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy import Column, Integer, String, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
-class UserRole(enum.Enum):
+class UserRole(str, enum.Enum):
     """User role enumeration."""
     SALES = "Sales"
     PRICING = "Pricing"
@@ -18,7 +18,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
-    role = Column(Enum(UserRole), nullable=False)
+    role = Column(SQLEnum(UserRole, native_enum=False, length=50), nullable=False)
     
     # Relationships
     opportunities = relationship("Opportunity", back_populates="creator_user")
