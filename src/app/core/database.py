@@ -8,7 +8,7 @@ from app.config import settings
 # Sync engine for migrations
 sync_engine = create_engine(
     settings.database_url,
-    echo=settings.app_env == "development",
+    echo=settings.db_echo,  # Use setting instead of hardcoded
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20
@@ -17,7 +17,7 @@ sync_engine = create_engine(
 # Async engine for application
 async_engine = create_async_engine(
     settings.async_database_url,
-    echo=settings.app_env == "development",
+    echo=settings.db_echo,  # Use setting instead of hardcoded
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20

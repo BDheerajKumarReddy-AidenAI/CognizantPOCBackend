@@ -33,13 +33,18 @@ def get_opportunity_tools(user_id: int) -> list:
                 opp = await service.create(data)
                 await db.commit()
                 
-                return {
+                result = {
                     "success": True,
-                    "opp_id": opp.id,
-                    "oppurtunity_name": opp.name,
+                    "opportunity_id": opp.id,  # Include ID for state tracking
+                    "name": opp.name,
                     "stage": opp.stage.value,
-                    "quote_amount": opp.quote_amount
+                    "quote_amount": opp.quote_amount,
+                    "contract_months": opp.contract_months,
+                    "users_count": opp.user_count,
+                    "location": opp.location.value
                 }
+                print(f"\n🔍 CREATE TOOL OUTPUT:\n{result}\n")
+                return result
             except Exception as e:
                 await db.rollback()
                 logger.error(f"Error creating opportunity: {e}")
@@ -50,30 +55,34 @@ def get_opportunity_tools(user_id: int) -> list:
         """
         List all opportunities created by the current user, optionally filtered by stage.
         Only shows opportunities where the user is the creator.
+        Returns opportunities WITHOUT internal IDs for user-facing display.
         """
         async with AsyncSessionLocal() as db:
             try:
                 service = OpportunityService(db, user_id)
                 stage_enum = Stage(stage) if stage else None
-                # Service already filters by user_id (creator_id)
                 opportunities = await service.list(stage_enum)
                 
-                return {
+                result = {
                     "success": True,
                     "total": len(opportunities),
                     "opportunities": [
                         {
-                            "opp_id": opp.id,
-                            "oppurtunity_name": opp.name,
+                            "internal_id": opp.id,  # Keep for state tracking, but don't show to user
+                            "name": opp.name,
                             "stage": opp.stage.value,
-                            "quote_amount": opp.quote_amount,
                             "contract_months": opp.contract_months,
                             "users_count": opp.user_count,
-                            "location": opp.location.value
+                            "location": opp.location.value,
+                            "quote_amount": opp.quote_amount if opp.quote_amount else None
                         }
                         for opp in opportunities
                     ]
                 }
+                
+                print(f"\n🔍 LIST TOOL OUTPUT:\n{result}\n")
+                return result
+                
             except Exception as e:
                 logger.error(f"Error listing opportunities: {e}")
                 return {"success": False, "error": str(e)}
@@ -83,18 +92,19 @@ def get_opportunity_tools(user_id: int) -> list:
         """
         Get details of a specific opportunity by ID.
         Only returns the opportunity if the current user is the creator.
+        Returns opportunity details WITHOUT the internal ID for user display.
         """
         async with AsyncSessionLocal() as db:
             try:
                 service = OpportunityService(db, user_id)
                 opp = await service.get_by_id(opp_id)
                 if not opp:
-                    return {"success": False, "error": f"Opportunity {opp_id} not found or you don't have access"}
+                    return {"success": False, "error": f"Opportunity not found or you don't have access"}
                 
-                return {
+                result = {
                     "success": True,
-                    "opp_id": opp.id,
-                    "oppurtunity_name": opp.name,
+                    "opportunity_id": opp.id,  # Include for state tracking
+                    "name": opp.name,
                     "location": opp.location.value,
                     "stage": opp.stage.value,
                     "quote_amount": opp.quote_amount,
@@ -103,6 +113,10 @@ def get_opportunity_tools(user_id: int) -> list:
                     "sales_person": opp.sales_person,
                     "client_id": opp.client_id
                 }
+                
+                print(f"\n🔍 GET TOOL OUTPUT:\n{result}\n")
+                return result
+                
             except Exception as e:
                 logger.error(f"Error getting opportunity: {e}")
                 return {"success": False, "error": str(e)}
@@ -119,6 +133,7 @@ def get_opportunity_tools(user_id: int) -> list:
         """
         Update an existing opportunity.
         Only allows updating opportunities created by the current user.
+        Returns updated opportunity WITHOUT internal ID.
         """
         async with AsyncSessionLocal() as db:
             try:
@@ -133,24 +148,29 @@ def get_opportunity_tools(user_id: int) -> list:
                 
                 opp = await service.update(opp_id, data)
                 if not opp:
-                    return {"success": False, "error": f"Opportunity {opp_id} not found or you don't have access"}
+                    return {"success": False, "error": f"Opportunity not found or you don't have access"}
                 
                 await db.commit()
                 
-                return {
+                result = {
                     "success": True,
-                    "opp_id": opp.id,
-                    "oppurtunity_name": opp.name,
+                    "opportunity_id": opp.id,  # Include for state tracking
+                    "name": opp.name,
                     "stage": opp.stage.value,
                     "quote_amount": opp.quote_amount,
+                    "contract_months": opp.contract_months,
+                    "users_count": opp.user_count,
+                    "location": opp.location.value,
                     "message": "Opportunity updated successfully"
                 }
+                
+                print(f"\n🔍 UPDATE TOOL OUTPUT:\n{result}\n")
+                return result
+                
             except Exception as e:
                 await db.rollback()
                 logger.error(f"Error updating opportunity: {e}")
                 return {"success": False, "error": str(e)}
-    
-    # Removed delete_opportunity tool
     
     return [
         create_opportunity,

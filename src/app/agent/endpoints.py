@@ -33,7 +33,7 @@ async def chat(
     if not user:
         raise HTTPException(status_code=404, detail=f"User {request.user_id} not found")
     
-    logger.info(f"💬 Chat request | Session: {session_id[:8]}... | User: {user.name} ({user.role.value})")
+    logger.info(f"💬 Chat | Session: {session_id[:8]}... | 👤 {user.name} ({user.role.value})")
     
     # Save user message
     try:
@@ -59,6 +59,11 @@ async def chat(
             )
             config = {"configurable": {"thread_id": session_id}}
             
+            print(f"\n{'='*60}")
+            print(f"🎯 USER INPUT: {request.message}")
+            print(f"👤 USER: {user.name} ({user.role.value})")
+            print(f"{'='*60}\n")
+            
             # Track tool executions
             tool_executions = {}
             final_content = ""
@@ -69,7 +74,8 @@ async def chat(
                     "messages": [{"role": "user", "content": request.message}],
                     "user_id": user.id,
                     "user_name": user.name,
-                    "user_role": user.role.value
+                    "user_role": user.role.value,
+                    "current_opportunity_id": None
                 },
                 config=config,
                 version="v2"
@@ -82,7 +88,10 @@ async def chat(
                     tool_input = event.get("data", {}).get("input", {})
                     run_id = event.get("run_id", "")
                     
-                    logger.info(f"🔨 Tool Start: {tool_name}")
+                    print(f"\n🔨 TOOL CALLED: {tool_name}")
+                    print(f"📥 TOOL INPUT: {tool_input}\n")
+                    
+                    logger.info(f"🔨 Tool: {tool_name}")
                     
                     tool_executions[run_id] = {
                         "name": tool_name,
@@ -104,9 +113,13 @@ async def chat(
                 # Tool execution completed
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
+                    tool_output = event.get("data", {}).get("output", "")
                     run_id = event.get("run_id", "")
                     
-                    logger.info(f"✅ Tool Complete: {tool_name}")
+                    print(f"\n✅ TOOL COMPLETED: {tool_name}")
+                    print(f"📤 TOOL OUTPUT: {tool_output}\n")
+                    
+                    logger.info(f"✅ Tool Done: {tool_name}")
                     
                     tool_info = tool_executions.get(run_id, {"name": tool_name, "args": {}})
                     complete_message = get_friendly_tool_message(
@@ -133,9 +146,14 @@ async def chat(
                         if content:
                             final_content += content
             
+            print(f"\n{'='*60}")
+            print(f"🤖 FINAL LLM RESPONSE:")
+            print(final_content)
+            print(f"{'='*60}\n")
+            
             # Send final message and save to history
             if final_content:
-                logger.info(f"📤 Final message length: {len(final_content)}")
+                logger.info(f"📤 Response ready ({len(final_content)} chars)")
                 
                 # Save AI message with a fresh session
                 try:
@@ -156,7 +174,7 @@ async def chat(
                     "session_id": session_id
                 })
             
-            logger.info(f"✅ Chat completed | Session: {session_id[:8]}...")
+            logger.info(f"✅ Chat complete | Session: {session_id[:8]}...")
             
         except Exception as e:
             logger.error(f"❌ Chat error: {str(e)}", exc_info=True)

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Database
     database_url: str
     async_database_url: str
+    db_echo: bool = False  # Set to False to disable SQLAlchemy query logging
     
     # OpenAI
     openai_api_key: str

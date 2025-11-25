@@ -8,8 +8,10 @@ from app.db.models.product import Product
 from app.schemas.opportunity import OpportunityCreate, OpportunityUpdate
 from app.services.base import BaseService
 from app.core.logging import get_logger
+from app.core.logging import get_emoji_logger
 
-logger = get_logger(__name__)
+logger = get_emoji_logger(__name__)
+
 
 
 class OpportunityService(BaseService[Opportunity]):
@@ -22,7 +24,7 @@ class OpportunityService(BaseService[Opportunity]):
     async def create(self, data: OpportunityCreate) -> Opportunity:
         """Create a new opportunity."""
         try:
-            logger.info(f"Creating opportunity: {data.name}")
+            logger.info(f"✨ Creating: {data.name}")
             
             opportunity = Opportunity(
                 name=data.name,
@@ -46,11 +48,11 @@ class OpportunityService(BaseService[Opportunity]):
             await self.db.flush()
             await self.db.refresh(opportunity)
             
-            logger.info(f"Created opportunity ID: {opportunity.id}")
+            logger.info(f"✅ Created ID: {opportunity.id}")
             return opportunity
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"Error creating opportunity: {e}")
+            logger.error(f"❌ Error creating opportunity: {e}")
             raise
     
     async def get_by_id(self, opp_id: int) -> Optional[Opportunity]:
@@ -105,7 +107,7 @@ class OpportunityService(BaseService[Opportunity]):
             if not opportunity:
                 return None
             
-            logger.info(f"Updating opportunity ID: {opp_id}")
+            logger.info(f"📝 Updating ID{opp_id}")
             
             # Update fields only if they are provided
             update_data = data.model_dump(exclude_unset=True, exclude={"product_ids"}, by_alias=False)
@@ -128,11 +130,11 @@ class OpportunityService(BaseService[Opportunity]):
             await self.db.flush()
             await self.db.refresh(opportunity)
             
-            logger.info(f"Updated opportunity ID: {opp_id}")
+            logger.info(f"✅ Updated ID: {opp_id}")
             return opportunity
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"Error updating opportunity: {e}")
+            logger.error(f"❌ Error updating opportunity: {e}")
             raise
     
     async def delete(self, opp_id: int) -> bool:
