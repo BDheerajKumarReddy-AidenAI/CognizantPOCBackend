@@ -1,11 +1,38 @@
-"""Application configuration management."""
-from functools import lru_cache
-from typing import Literal
+"""Application configuration."""
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings."""
+    
+    # Project Info
+    project_name: str = Field(default="CRM Sales Agent", description="Project name")
+    version: str = Field(default="1.0.0", description="API version")
+    environment: str = Field(default="development", description="Environment (development, production)")
+    
+    # Database
+    database_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/sales_db",
+        description="Synchronous database URL for Alembic"
+    )
+    async_database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/sales_db",
+        description="Async database URL for application"
+    )
+    db_echo: bool = Field(default=False, description="Echo SQL queries")
+    
+    # CORS
+    backend_cors_origins: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8000"],
+        description="Allowed CORS origins"
+    )
+    
+    # OpenAI
+    openai_api_key: str = Field(..., description="OpenAI API key")
+    agent_model: str = Field(default="gpt-4o-mini", description="OpenAI model for agent")
+    agent_temperature: float = Field(default=0.0, description="Model temperature")
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -13,35 +40,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
-    
-    # App
-    app_env: Literal["development", "staging", "production"] = "development"
-    log_level: str = "INFO"
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-    
-    # Database
-    database_url: str
-    async_database_url: str
-    db_echo: bool = False  # Set to False to disable SQLAlchemy query logging
-    
-    # OpenAI
-    openai_api_key: str
-    
-    # Agent
-    agent_model: str = "gpt-4o-mini"
-    agent_temperature: float = 0.0
-    
-    @property
-    def is_production(self) -> bool:
-        """Check if running in production."""
-        return self.app_env == "production"
 
 
-@lru_cache
-def get_settings() -> Settings:
-    """Get cached settings instance."""
-    return Settings()
-
-
-settings = get_settings()
+# Global settings instance
+settings = Settings()

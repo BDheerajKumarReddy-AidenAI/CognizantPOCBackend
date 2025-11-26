@@ -1,13 +1,15 @@
-"""Conversation API routes."""
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+"""Conversation API endpoints."""
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps import get_db
 from app.db.models.conversation import Conversation
-from app.db.session import get_db
-from app.schemas.conversation import ConversationThreadResponse, ConversationMessagesResponse
+from app.schemas.conversation import (
+    ConversationThreadResponse,
+    ConversationMessagesResponse
+)
 
-router = APIRouter(prefix="/conversations", tags=["Conversations"])
+router = APIRouter()
 
 
 @router.get("/user/{user_id}/threads", response_model=list[ConversationThreadResponse])

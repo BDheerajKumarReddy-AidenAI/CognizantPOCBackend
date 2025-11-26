@@ -1,24 +1,19 @@
 """Product database model."""
-from sqlalchemy import Column, Integer, String, Float
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean
 from app.core.database import Base
 
 
 class Product(Base):
-    """Product model representing sellable items."""
+    """Product model for the product catalog."""
     
     __tablename__ = "products"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, unique=True, index=True)
-    price = Column(Float, nullable=False)
-    
-    # Relationships - use string reference for secondary table
-    opportunities = relationship(
-        "Opportunity",
-        secondary="opportunity_product",  # Use string reference
-        back_populates="products"
-    )
+    name = Column(String(200), nullable=False, unique=True, index=True)
+    description = Column(Text)
+    unit_price = Column(Numeric(15, 2), nullable=False)
+    category = Column(String(100), index=True)
+    is_active = Column(Boolean, default=True, index=True)
     
     def __repr__(self) -> str:
-        return f"<Product(id={self.id}, name='{self.name}', price={self.price})>"
+        return f"<Product(id={self.id}, name='{self.name}', price={self.unit_price})>"

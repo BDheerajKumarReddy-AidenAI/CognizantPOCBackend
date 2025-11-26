@@ -4,6 +4,12 @@ from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.config import settings
 from app.core.logging import get_logger
+import sys
+import asyncio
+
+# Fix for Windows - set event loop policy BEFORE creating pool
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logger = get_logger(__name__)
 
@@ -22,6 +28,15 @@ class AgentCheckpointer:
         
         logger.info("🔧 Setting up agent checkpointer...")
         
+        # Clean the connection string - psycopg needs plain postgresql:// format
+        conninfo = settings.database_url
+        
+        # Remove any dialect suffixes
+        conninfo = conninfo.replace("postgresql+asyncpg://", "postgresql://")
+        conninfo = conninfo.replace("postgresql+psycopg://", "postgresql://")
+        
+        logger.info(f"📡 Connecting to: {conninfo.split('@')[1] if '@' in conninfo else 'database'}")
+        
         # Connection kwargs - IMPORTANT: autocommit=True to avoid transaction block issues
         connection_kwargs = {
             "autocommit": True,
@@ -30,7 +45,7 @@ class AgentCheckpointer:
         
         # Create connection pool with proper configuration
         self.pool = AsyncConnectionPool(
-            conninfo=settings.async_database_url.replace("+psycopg", ""),
+            conninfo=conninfo,
             kwargs=connection_kwargs,
             min_size=2,
             max_size=10,

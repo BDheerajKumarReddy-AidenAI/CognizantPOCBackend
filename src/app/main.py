@@ -1,72 +1,77 @@
-"""
-Main FastAPI application combining backend API and agent endpoints.
-"""
+"""Main FastAPI application."""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.core.logging import setup_logging, get_logger
+from app.core.logging import get_logger
 
-# Import database and models EARLY
-from app.core.database import Base
-from app.db import models  # This triggers model registration
-
-from app.agent.checkpointer import agent_checkpointer
-from app.api.routers import health, opportunities, users, conversations
-from app.agent.endpoints import router as agent_router
-
-# Setup logging
-setup_logging()
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle manager for startup and shutdown events."""
-    # Startup
-    logger.info("🚀 Starting Sales Agent API...")
-    logger.info(f"📍 Environment: {settings.app_env}")
-    
-    # Initialize agent checkpointer
+    """Application lifespan events."""
     try:
-        await agent_checkpointer.setup()
-        logger.info("✅ Agent checkpointer initialized")
+        # Startup
+        logger.info(f"🚀 Starting {settings.project_name} v{settings.version}")
+        logger.info(f"📊 Environment: {settings.environment}")
+        logger.info(f"🤖 Agent Model: {settings.agent_model}")
+        
+        # Import here to avoid circular imports
+        from app.agent.checkpointer import agent_checkpointer
+        
+        # Initialize agent checkpointer
+        try:
+            await agent_checkpointer.setup()
+            logger.info("✅ Agent checkpointer initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize checkpointer: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        yield
+        
+        # Shutdown
+        logger.info(f"🛑 Shutting down {settings.project_name}")
+        
+        # Cleanup checkpointer
+        try:
+            await agent_checkpointer.close()
+            logger.info("✅ Agent checkpointer closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing checkpointer: {e}")
+            
     except Exception as e:
-        logger.error(f"❌ Failed to initialize agent checkpointer: {e}")
+        logger.error(f"❌ Error in lifespan: {e}")
+        import traceback
+        traceback.print_exc()
         raise
-    
-    logger.info("✅ Application started successfully")
-    
-    yield
-    
-    # Shutdown
-    logger.info("🛑 Shutting down...")
-    await agent_checkpointer.close()
-    logger.info("✅ Cleanup completed")
 
 
-# Create FastAPI app
+# Create FastAPI app with lifespan
 app = FastAPI(
-    title="Sales Agent API",
-    description="Unified API for sales opportunity management with AI agent",
-    version="1.0.0",
+    title=settings.project_name,
+    version=settings.version,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if not settings.is_production else ["https://yourdomain.com"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(health.router)
-app.include_router(users.router, prefix="/api/v1")
-app.include_router(conversations.router, prefix="/api/v1")
-app.include_router(opportunities.router, prefix="/api/v1")
+from app.api.v1 import api_router
+from app.agent.endpoints import router as agent_router
+
+app.include_router(api_router, prefix="/api/v1")
 app.include_router(agent_router)
 
 
@@ -74,20 +79,27 @@ app.include_router(agent_router)
 async def root():
     """Root endpoint."""
     return {
-        "message": "Sales Agent API",
-        "version": "1.0.0",
-        "environment": settings.app_env,
-        "docs": "/docs"
+        "name": settings.project_name,
+        "version": settings.version,
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "environment": settings.environment
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
-    logger.info(f"🚀 Starting server on {settings.api_host}:{settings.api_port}")
     uvicorn.run(
         "app.main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=settings.app_env == "development"
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
     )

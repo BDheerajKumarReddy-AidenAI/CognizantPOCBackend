@@ -1,59 +1,49 @@
 """Opportunity database model."""
 import enum
-from typing import TYPE_CHECKING
-from sqlalchemy import Column, Integer, String, Enum as SQLEnum, Float, ForeignKey
-from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, Text, Enum as SQLEnum, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.core.database import Base
 
-if TYPE_CHECKING:
-    from app.db.models.user import User
-    from app.db.models.client import Client
-    from app.db.models.product import Product
 
-
-class Location(str, enum.Enum):
-    """Location enumeration."""
-    USA = "USA"
-    UK = "UK"
-    INDIA = "India"
-
-
-class Stage(str, enum.Enum):
+class OpportunityStage(str, enum.Enum):
     """Opportunity stage enumeration."""
-    LEAD = "Lead"
-    QUALIFIED = "Qualified"
+    PROSPECT = "Prospect"
+    QUALIFICATION = "Qualification"
     PROPOSAL = "Proposal"
+    QUOTE_REQUESTED = "Quote Requested"
     NEGOTIATION = "Negotiation"
-    WON = "Won"
-    LOST = "Lost"
+    CLOSED_WON = "Closed Won"
+    CLOSED_LOST = "Closed Lost"
 
 
 class Opportunity(Base):
-    """Opportunity model for sales pipeline management."""
+    """Opportunity model for sales pipeline."""
     
     __tablename__ = "opportunities"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)
-    location = Column(SQLEnum(Location, native_enum=False, length=50), nullable=False)
-    stage = Column(SQLEnum(Stage, native_enum=False, length=50), nullable=False, default=Stage.LEAD, index=True)
-    quote_amount = Column(Float, nullable=False, default=0.0)
-    contract_months = Column(Integer)
-    user_count = Column(Integer)
-    sales_person = Column(String, nullable=True)
-    
-    # Foreign Keys
-    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=False, index=True)
+    description = Column(Text)
+    estimated_value = Column(Numeric(15, 2))
+    probability = Column(Integer)
+    stage = Column(
+        SQLEnum(OpportunityStage, native_enum=False, length=50),
+        default=OpportunityStage.PROSPECT,
+        nullable=False,
+        index=True
+    )
+    expected_close_date = Column(Date)
+    created_date = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    quote_request_notes = Column(Text)
     
     # Relationships
-    creator_user: "Mapped[User]" = relationship("User", back_populates="opportunities")
-    client: "Mapped[Client]" = relationship("Client", back_populates="opportunities")
-    products: "Mapped[list[Product]]" = relationship(
-        "Product",
-        secondary="opportunity_product",
-        back_populates="opportunities"
-    )
+    client = relationship("Client", back_populates="opportunities")
+    owner = relationship("User", back_populates="opportunities", foreign_keys=[owner_id])
+    quotes = relationship("Quote", back_populates="opportunity", cascade="all, delete-orphan")
+    activities = relationship("Activity", back_populates="opportunity")
     
     def __repr__(self) -> str:
         return f"<Opportunity(id={self.id}, name='{self.name}', stage='{self.stage.value}')>"

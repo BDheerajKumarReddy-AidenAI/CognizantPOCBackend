@@ -1,16 +1,27 @@
 """User schemas."""
-from app.schemas.base import BaseSchema
+from pydantic import BaseModel, EmailStr
 from app.db.models.user import UserRole
 
 
-class UserResponse(BaseSchema):
-    """Schema for user response."""
-    id: int
+class UserCreate(BaseModel):
+    """Schema for creating a user."""
     name: str
+    email: EmailStr
     role: UserRole
 
 
-class UserListResponse(BaseSchema):
+class UserResponse(BaseModel):
+    """Schema for user response."""
+    id: int
+    name: str
+    email: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
+class UserListResponse(BaseModel):
     """Schema for list of users."""
     users: list[UserResponse]
     total: int
