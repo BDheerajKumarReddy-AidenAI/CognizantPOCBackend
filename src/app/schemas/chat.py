@@ -1,5 +1,5 @@
 """Chat/Agent schemas."""
-from typing import Optional
+from typing import Optional , Any
 from pydantic import Field
 from app.schemas.base import BaseSchema
 
@@ -16,4 +16,5 @@ class ChatStreamEvent(BaseSchema):
     current_stage: Optional[str] = None
     final_message: Optional[str] = None
     error: Optional[str] = None
+    tool_output : Optional[Any] = None
     session_id: str = Field(..., alias="thread_id")

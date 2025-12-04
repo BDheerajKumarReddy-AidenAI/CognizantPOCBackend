@@ -6,6 +6,8 @@ from msal import ConfidentialClientApplication
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
+
+from typing import Optional
 import os
  
 
@@ -73,7 +75,9 @@ client = httpx.AsyncClient(
         "OData-MaxVersion": "4.0",
         "OData-Version": "4.0",
         "Accept": "application/json",
-        "Content-Type": "application/json; charset=utf-8"
+        "Content-Type": "application/json; charset=utf-8",
+        "Prefer": "return=representation"
+
     }
 )
 mcp = FastMCP("dynamics365-mcp")
@@ -86,6 +90,8 @@ async def get_opportunities() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_leads() -> dict:
     """
@@ -95,6 +101,8 @@ async def get_leads() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_accounts() -> dict:
     """
@@ -104,6 +112,8 @@ async def get_accounts() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_products() -> dict:
     """
@@ -113,6 +123,8 @@ async def get_products() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_quotes() -> dict:
     """
@@ -122,6 +134,8 @@ async def get_quotes() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_salesorders() -> dict:
     """
@@ -131,6 +145,8 @@ async def get_salesorders() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_units() -> dict:
     """
@@ -140,6 +156,8 @@ async def get_units() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
 @mcp.tool()
 async def get_oprtunity_products() -> dict:
     """
@@ -149,6 +167,298 @@ async def get_oprtunity_products() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+@mcp.tool()
+async def create_opportunity(
+    name: str,
+    account_id: str,
+    customer_need: str,
+    total_amount: float,
+    contact_id: Optional[str] = None,
+    estimated_value: Optional[float] = None,
+    estimated_close_date: Optional[str] = None,
+    description: Optional[str] = None
+) -> dict:
+    """
+    Create an Opportunity in Dynamics 365 Sales.
+    """
+    if not account_id:
+        raise ValueError("account_id is required to create an opportunity.")
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
+
+    body = {
+        "name": name,
+        "customerid_account@odata.bind": f"/accounts({account_id})",
+        "customerneed": customer_need,
+        "totalamount": float(total_amount)  # MUST be number
+    }
+
+    if contact_id:
+        body["customerid_contact@odata.bind"] = f"/contacts({contact_id})"
+
+    if estimated_value is not None:
+        body["estimatedvalue"] = estimated_value
+
+    if estimated_close_date:
+        body["estimatedclosedate"] = estimated_close_date
+
+    if description:
+        body["description"] = description
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+
+
+
+@mcp.tool()
+async def create_opportunity_product(
+    opportunity_id: str,
+    opportunity_product_name: str,
+    quantity: int,
+    uom_id: str,
+    product_id: str ,
+    price_per_unit: Optional[float] = None,
+    is_price_overridden: Optional[bool] = None,
+    manual_discount_amount: Optional[float] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """
+    Create an Opportunity Product (Opportunity Line Item) in Dynamics 365.
+
+    """
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/opportunityproducts"
+    )
+
+    body = {
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
+        "opportunityproductname": opportunity_product_name,
+        "quantity": int(quantity),
+        "uomid@odata.bind":f"/uoms({uom_id})",
+        "productid@odata.bind":f"/products({product_id})"
+    }
+
+    # Optional pricing
+    if price_per_unit is not None:
+        body["priceperunit"] = price_per_unit
+
+    if is_price_overridden is not None:
+        body["ispriceoverridden"] = is_price_overridden
+
+    if manual_discount_amount is not None:
+        body["manualdiscountamount"] = manual_discount_amount
+
+    if description is not None:
+        body["description"] = description
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+
+
+@mcp.tool()
+async def create_quote(
+    name: str,
+    opportunity_id: str ,
+) -> dict:
+    """
+    Create a Quote record in Dynamics 365 Sales.
+    """
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
+    body = {
+        "name": name,
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
+    }
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+
+@mcp.tool()
+async def create_quote_with_discount(
+    name: str,
+    opportunity_id: str,
+    discount_percentage: float,
+    discount_amount: Optional[float]=None ,
+    freight_amount: Optional[float] = None,
+) -> dict:
+    """
+    Create a Quote with discount fields in Dynamics 365 Sales.
+    opportunity_id is mandatory.
+    """
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
+
+
+    body = {
+        "name": name,
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
+        "discount_amount":float(discount_amount),
+        "discount_percentage":float(discount_percentage)
+    }
+
+
+    if freight_amount is not None:
+        body["freightamount"] = freight_amount
+
+
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+
+@mcp.tool()
+async def create_lead(
+    subject: str,
+    firstname: Optional[str] = None,
+    lastname: Optional[str] = None,
+    email: Optional[str] = None,
+    mobilephone: Optional[str] = None,
+    companyname: Optional[str] = None,
+    jobtitle: Optional[str] = None,
+    description: Optional[str] = None,
+    parent_account_id: Optional[str] = None,
+    parent_contact_id: Optional[str] = None,
+) -> dict:
+    """
+    Create a Lead in Dynamics 365 Sales.
+    - subject is mandatory
+    - optional fields included ONLY when values are provided
+      IMPORTANT RULE
+
+        You should pass EITHER:
+        parentaccountid
+        OR
+        parentcontactid
+        Never both.
+        CRM doesn't allow a Lead to be linked to two parents simultaneously.
+    """
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/leads"
+
+    # Mandatory field
+    body = {
+        "subject": subject
+    }
+
+    # Optional normal fields — add ONLY if provided
+    if firstname is not None:
+        body["firstname"] = firstname
+
+    if lastname is not None:
+        body["lastname"] = lastname
+
+    if email is not None:
+        body["emailaddress1"] = email
+
+    if mobilephone is not None:
+        body["mobilephone"] = mobilephone
+
+    if companyname is not None:
+        body["companyname"] = companyname
+
+    if jobtitle is not None:
+        body["jobtitle"] = jobtitle
+
+
+    if description is not None:
+        body["description"] = description
+
+    # OData bindings — optional
+    if parent_account_id is not None:
+        body["parentaccountid@odata.bind"] = f"/accounts({parent_account_id})"
+
+    if parent_contact_id is not None:
+        body["parentcontactid@odata.bind"] = f"/contacts({parent_contact_id})"
+
+    # Send request
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+@mcp.tool()
+async def create_sales_order(
+    name: str,
+    price_list_id: str ,
+    is_price_locked: bool ,
+    customer_account_id: str,
+    customer_contact_id: Optional[str] = None,
+    description: Optional[str] = None,
+    bill_to_name: Optional[str] = None,
+    ship_to_name: Optional[str] = None
+) -> dict:
+    """
+    Create a Sales Order (salesorder) in Dynamics 365 Sales.
+
+    Required:
+    - name
+    - customer (account or contact)
+    - price_list_id (pricelevelid)
+    - is_price_locked
+
+    Optional:
+    - description
+    - bill_to_name
+    - ship_to_name
+    """
+
+    if not price_list_id:
+        raise ValueError("price_list_id is required to create a Sales Order.")
+
+    if not (customer_account_id or customer_contact_id):
+        raise ValueError("Either customer_account_id or customer_contact_id is required.")
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/salesorders"
+
+    body = {
+        "name": name,
+        "ispricelocked": is_price_locked
+    }
+
+    # Customer - Account OR Contact
+    if customer_account_id:
+        body["customerid_account@odata.bind"] = f"/accounts({customer_account_id})"
+
+    if customer_contact_id:
+        body["customerid_contact@odata.bind"] = f"/contacts({customer_contact_id})"
+
+    # Price List
+    body["pricelevelid@odata.bind"] = f"/pricelevels({price_list_id})"
+
+    # Optional fields
+    if description is not None:
+        body["description"] = description
+
+    if bill_to_name is not None:
+        body["billto_name"] = bill_to_name
+
+    if ship_to_name is not None:
+        body["shipto_name"] = ship_to_name
+
+    # Send request
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="127.0.0.1", port=6000, path="/mcp")

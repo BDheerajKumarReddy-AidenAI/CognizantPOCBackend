@@ -35,3 +35,4 @@ class AgentState(TypedDict):
     
     # Conversation intent tracking
     last_action: Optional[str]
+    

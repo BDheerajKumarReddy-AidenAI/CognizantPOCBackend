@@ -56,7 +56,7 @@ async def chat(
         await db.commit()
         
         # Create agent graph
-        graph = create_agent_graph(
+        graph = await create_agent_graph(
             user_id=user.id,
             user_name=user.name,
             user_role=user.role.value
@@ -108,7 +108,7 @@ async def chat(
                         tool_input = event.get("data", {}).get("input", {})
                         
                         print(f"\n🔨 TOOL CALLED: {tool_name}")
-                        print(f"📥 TOOL INPUT: {tool_input}")
+                        # print(f"📥 TOOL INPUT: {tool_input}")
                         
                         logger.info(f"🔨 Tool: {tool_name}")
                         
@@ -124,14 +124,15 @@ async def chat(
                         tool_output = event.get("data", {}).get("output", {})
                         
                         print(f"\n✅ TOOL COMPLETED: {tool_name}")
-                        print(f"📤 TOOL OUTPUT: {tool_output}")
+                        # print(f"📤 TOOL OUTPUT: {tool_output}")
                         
                         logger.info(f"✅ Tool Done: {tool_name}")
                         
                         # Send completion update
                         stage_event = ChatStreamEvent(
                             current_stage=f"✅ Completed {tool_name}!",
-                            session_id=session_id
+                            session_id=session_id,
+                            tool_output = tool_output
                         )
                         yield f"data: {stage_event.model_dump_json()}\n\n"
                     

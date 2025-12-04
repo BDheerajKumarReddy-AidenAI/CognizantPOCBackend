@@ -10,12 +10,13 @@ from app.agent.prompts import get_system_prompt
 from app.agent.checkpointer import agent_checkpointer
 from app.config import settings
 from app.core.logging import get_logger
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
 logger = get_logger(__name__)
 
 
-def create_agent_graph(user_id: int, user_name: str, user_role: str):
+async def create_agent_graph(user_id: int, user_name: str, user_role: str):
     """Create the agent graph with tools and checkpointer."""
     
     # Get system prompt with user context
@@ -35,12 +36,34 @@ def create_agent_graph(user_id: int, user_name: str, user_role: str):
     )
     
     # Get tools based on user role
-    from app.db.models.user import UserRole
-    tools = get_agent_tools(user_id, UserRole(user_role))
-    llm_with_tools = llm.bind_tools(tools)
+    # from app.db.models.user import UserRole
+    # tools = get_agent_tools(user_id, UserRole(user_role))
+    # llm_with_tools = llm.bind_tools(tools)
     
-    # Create base tool node
-    base_tool_node = ToolNode(tools)
+    # # Create base tool node
+    # base_tool_node = ToolNode(tools)
+
+
+    # Load MCP tools instead of internal tools
+
+
+    print("🔌 Connecting to Dynamics MCP server...")
+
+    client = MultiServerMCPClient({
+        "dynamics": {
+            "url": "http://127.0.0.1:6000/mcp",
+            "transport": "streamable_http"
+        }
+    })
+
+    mcp_tools = await client.get_tools()
+
+    print(f"🔧 Loaded {len(mcp_tools)} Dynamics MCP tools")
+
+    llm_with_tools = llm.bind_tools(mcp_tools)
+
+    base_tool_node = ToolNode(mcp_tools)
+
     
     # Define agent node
     async def agent_node(state: AgentState) -> AgentState:
