@@ -11,7 +11,8 @@ from app.agent.graph import create_agent_graph
 from app.agent.checkpointer import agent_checkpointer
 from app.schemas.chat import ChatRequest, ChatStreamEvent
 from app.core.logging import get_logger
-
+from langchain_core.messages import ToolMessage
+import json
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -120,22 +121,69 @@ async def chat(
                         yield f"data: {stage_event.model_dump_json()}\n\n"
                     
                     elif event_type == "on_tool_end":
+                        # tool_name = event.get("name", "")
+                        # tool_output = event.get("data", {}).get("output", {})
+                        
+                        # print(f"\n✅ TOOL COMPLETED: {tool_name}")
+                        # # print(f"📤 TOOL OUTPUT: {tool_output}")
+                        
+                        # logger.info(f"✅ Tool Done: {tool_name}")
+                        
+                        # # Send completion update
+                        # stage_event = ChatStreamEvent(
+                        #     current_stage=f"✅ Completed {tool_name}!",
+                        #     session_id=session_id,
+                        #     tool_output = tool_output
+                        # )
+                        # yield f"data: {stage_event.model_dump_json()}\n\n"
                         tool_name = event.get("name", "")
                         tool_output = event.get("data", {}).get("output", {})
-                        
+
                         print(f"\n✅ TOOL COMPLETED: {tool_name}")
-                        # print(f"📤 TOOL OUTPUT: {tool_output}")
-                        
-                        logger.info(f"✅ Tool Done: {tool_name}")
-                        
-                        # Send completion update
+
+                        # ---------------------------------------------------------
+                        # 🔧 STEP 1 — Normalize tool_output into a Python dict
+                        # ---------------------------------------------------------
+                        # Case 1: ToolMessage object → use .content
+                        if isinstance(tool_output, ToolMessage):
+                            tool_output = tool_output.content
+
+                        # Case 2: If it's a JSON string → parse to dict
+                        if isinstance(tool_output, str):
+                            try:
+                                tool_output = json.loads(tool_output)
+                            except:
+                                # fallback — wrap raw string
+                                tool_output = {"raw_output": tool_output}
+
+                        # Case 3: If still not a dict → force convert
+                        if not isinstance(tool_output, dict):
+                            tool_output = {"raw_output": str(tool_output)}
+                        # ---------------------------------------------------------
+                        # 🔧 STEP 2 — Inject CRM URL for created Opportunity
+                        # ---------------------------------------------------------
+                        if tool_name == "create_opportunity":
+                            opp_id = tool_output.get("opportunityid")
+                            if opp_id:
+                                crm_url = (
+                                    "https://orge47cb78c.crm8.dynamics.com/main.aspx?"
+                                    "appid=4c0894ba-19c9-f011-8543-7c1e523cbef1"
+                                    "&forceUCI=1&pagetype=entityrecord&etn=opportunity&id="
+                                    + str(opp_id)
+                                )
+                                tool_output["crm_record_url"] = crm_url
+
+                        # ---------------------------------------------------------
+                        # 🔧 STEP 3 — Stream updated tool_output to frontend
+                        # ---------------------------------------------------------
                         stage_event = ChatStreamEvent(
                             current_stage=f"✅ Completed {tool_name}!",
                             session_id=session_id,
-                            tool_output = tool_output
+                            tool_output=tool_output
                         )
+
                         yield f"data: {stage_event.model_dump_json()}\n\n"
-                    
+
                     # Handle chat model streaming
                     elif event_type == "on_chat_model_stream":
                         chunk = event.get("data", {}).get("chunk", {})

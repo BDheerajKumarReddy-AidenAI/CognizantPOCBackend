@@ -173,7 +173,7 @@ async def create_opportunity(
     name: str,
     account_id: str,
     customer_need: str,
-    total_amount: float,
+    budget_amount: float,   # <-- FIX
     contact_id: Optional[str] = None,
     estimated_value: Optional[float] = None,
     estimated_close_date: Optional[str] = None,
@@ -191,7 +191,7 @@ async def create_opportunity(
         "name": name,
         "customerid_account@odata.bind": f"/accounts({account_id})",
         "customerneed": customer_need,
-        "totalamount": float(total_amount)  # MUST be number
+        "budgetamount": float(budget_amount)  # <-- FIXED
     }
 
     if contact_id:
@@ -210,6 +210,7 @@ async def create_opportunity(
     response.raise_for_status()
 
     return response.json()
+
 
 
 
@@ -306,8 +307,7 @@ async def create_quote_with_discount(
     body = {
         "name": name,
         "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
-        "discount_amount":float(discount_amount),
-        "discount_percentage":float(discount_percentage)
+        "discountpercentage": float(discount_percentage)
     }
 
 
