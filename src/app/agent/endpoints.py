@@ -187,31 +187,31 @@ async def chat(
                                 tool_output["quote_crm_url"] = crm_url
 
                                 
-                        suggestions = []
-                        if tool_name == "get_opportunities":
-                            suggestions = [
-                                "View opportunity details",
-                                "Create a new opportunity",
-                            ]
+                        # suggestions = []
+                        # if tool_name == "get_opportunities":
+                        #     suggestions = [
+                        #         "View opportunity details",
+                        #         "Create a new opportunity",
+                        #     ]
 
-                        elif tool_name == "create_opportunity":
-                            suggestions = [
-                                "Create a quote for this opportunity",
-                            ]
+                        # elif tool_name == "create_opportunity":
+                        #     suggestions = [
+                        #         "Create a quote for this opportunity",
+                        #     ]
 
                         
 
-                        elif tool_name == "create_quote":
-                            suggestions = [
-                                "Update this quote with discount",
-                                "Approve or revise the quote",
-                            ]
+                        # elif tool_name == "create_quote":
+                        #     suggestions = [
+                        #         "Update this quote with discount",
+                        #         "Approve or revise the quote",
+                        #     ]
 
-                        elif tool_name == "create_lead":
-                            suggestions = [
-                                "Qualify this lead",
-                                "Convert the lead to an opportunity",
-                            ]
+                        # elif tool_name == "create_lead":
+                        #     suggestions = [
+                        #         "Qualify this lead",
+                        #         "Convert the lead to an opportunity",
+                        #     ]
 
                         # ---------------------------------------------------------
                         # 🔧 STEP 3 — Stream updated tool_output to frontend
@@ -220,7 +220,7 @@ async def chat(
                             current_stage=f"✅ Completed {tool_name}!",
                             session_id=session_id,
                             tool_output=tool_output,
-                            suggestions=suggestions
+                            # suggestions=suggestions
                         )
 
 
@@ -236,22 +236,36 @@ async def chat(
                 print("🤖 FINAL LLM RESPONSE:")
                 print(final_response)
                 print("="*70 + "\n")
+                ai_reply = ""
+                ai_suggestions = []
                 
+                try:
+                    # Try to parse as JSON
+                    parsed = json.loads(final_response)
+                    ai_reply = parsed.get("reply", final_response)
+                    ai_suggestions = parsed.get("suggestions", [])
+                    
+                    print(f"✅ Parsed AI suggestions: {ai_suggestions}")
+                except json.JSONDecodeError:
+                    # Fallback: use raw response if not valid JSON
+                    ai_reply = final_response
+                    print("⚠️ LLM response was not valid JSON, using raw response")
                 # Save assistant response
                 await conv_service.create_message(
                     thread_id=session_id,
                     user_id=user.id,
                     message_type="ai",
-                    message=final_response
+                    message=ai_reply
                 )
                 await db.commit()
                 
-                logger.info(f"📤 Response ready ({len(final_response)} chars)")
+                logger.info(f"📤 Response ready ({len(ai_reply)} chars, {len(ai_suggestions)} suggestions)")
                 
                 # Send final message
                 final_event = ChatStreamEvent(
-                    final_message=final_response,
-                    session_id=session_id
+                    final_message=ai_reply,
+                    session_id=session_id,
+                    suggestions=ai_suggestions if ai_suggestions else None
                 )
                 yield f"data: {final_event.model_dump_json()}\n\n"
                 
