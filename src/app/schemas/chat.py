@@ -17,4 +17,5 @@ class ChatStreamEvent(BaseSchema):
     final_message: Optional[str] = None
     error: Optional[str] = None
     tool_output : Optional[Any] = None
+    suggestions: Optional[list[str]] = None
     session_id: str = Field(..., alias="thread_id")

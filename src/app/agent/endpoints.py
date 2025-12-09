@@ -136,6 +136,7 @@ async def chat(
                         #     tool_output = tool_output
                         # )
                         # yield f"data: {stage_event.model_dump_json()}\n\n"
+                        
                         tool_name = event.get("name", "")
                         tool_output = event.get("data", {}).get("output", {})
 
@@ -171,7 +172,46 @@ async def chat(
                                     "&forceUCI=1&pagetype=entityrecord&etn=opportunity&id="
                                     + str(opp_id)
                                 )
-                                tool_output["crm_record_url"] = crm_url
+                                tool_output["opportunity_crm_url"] = crm_url
+
+                        if tool_name == "create_quote":
+                            quote_id = tool_output.get("quoteid")
+                            
+                            if quote_id:
+                                crm_url = (
+                                    "https://orge47cb78c.crm8.dynamics.com/main.aspx?"
+                                    "appid=4c0894ba-19c9-f011-8543-7c1e523cbef1"
+                                    "&forceUCI=1&pagetype=entityrecord&etn=quote&id="
+                                    + str(quote_id)
+                                )
+                                tool_output["quote_crm_url"] = crm_url
+
+                                
+                        suggestions = []
+                        if tool_name == "get_opportunities":
+                            suggestions = [
+                                "View opportunity details",
+                                "Create a new opportunity",
+                            ]
+
+                        elif tool_name == "create_opportunity":
+                            suggestions = [
+                                "Create a quote for this opportunity",
+                            ]
+
+                        
+
+                        elif tool_name == "create_quote":
+                            suggestions = [
+                                "Update this quote with discount",
+                                "Approve or revise the quote",
+                            ]
+
+                        elif tool_name == "create_lead":
+                            suggestions = [
+                                "Qualify this lead",
+                                "Convert the lead to an opportunity",
+                            ]
 
                         # ---------------------------------------------------------
                         # 🔧 STEP 3 — Stream updated tool_output to frontend
@@ -179,8 +219,10 @@ async def chat(
                         stage_event = ChatStreamEvent(
                             current_stage=f"✅ Completed {tool_name}!",
                             session_id=session_id,
-                            tool_output=tool_output
+                            tool_output=tool_output,
+                            suggestions=suggestions
                         )
+
 
                         yield f"data: {stage_event.model_dump_json()}\n\n"
 

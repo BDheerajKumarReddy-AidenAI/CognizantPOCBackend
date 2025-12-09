@@ -211,6 +211,75 @@ async def create_opportunity(
 
     return response.json()
 
+@mcp.tool()
+async def update_opportunity(
+    opportunity_id: str,
+    name: Optional[str] = None,
+    customer_need: Optional[str] = None,
+    budget_amount: Optional[float] = None,
+    estimated_value: Optional[float] = None,
+    estimated_close_date: Optional[str] = None,
+    description: Optional[str] = None,
+    account_id: Optional[str] = None,
+    contact_id: Optional[str] = None
+) -> dict:
+    """
+    Update fields on an existing Opportunity in Dynamics 365 Sales.
+
+    - opportunity_id is required
+    - All other parameters are optional (only passed fields will be updated)
+    """
+
+    if not opportunity_id:
+        raise ValueError("opportunity_id is required to update an opportunity.")
+
+    # PATCH URL for updating opportunity
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/opportunities({opportunity_id})"
+    )
+
+    body = {}
+
+    # Optional updates
+    if name is not None:
+        body["name"] = name
+
+    if customer_need is not None:
+        body["customerneed"] = customer_need
+
+    if budget_amount is not None:
+        body["budgetamount"] = float(budget_amount)
+
+    if estimated_value is not None:
+        body["estimatedvalue"] = float(estimated_value)
+
+    if estimated_close_date is not None:
+        body["estimatedclosedate"] = estimated_close_date  # must be YYYY-MM-DD
+
+    if description is not None:
+        body["description"] = description
+
+    if account_id is not None:
+        body["customerid_account@odata.bind"] = f"/accounts({account_id})"
+
+    if contact_id is not None:
+        body["customerid_contact@odata.bind"] = f"/contacts({contact_id})"
+
+    # Ensure at least one field is updated
+    if not body:
+        raise ValueError("At least one field must be provided to update the opportunity.")
+
+    # Perform PATCH
+    response = await client.patch(url, json=body)
+    response.raise_for_status()
+
+    # Success: Dynamics returns empty body for PATCH
+    return {
+        "message": "Opportunity updated successfully",
+        "opportunity_id": opportunity_id,
+        "updated_fields": body
+    }
 
 
 
@@ -230,7 +299,8 @@ async def create_opportunity_product(
 ) -> dict:
     """
     Create an Opportunity Product (Opportunity Line Item) in Dynamics 365.
-
+    - opportunity_id: ID of the parent Opportunity (mandatory)
+    - opportunity_product_name: Name of the Opportunity Product (mandatory) 
     """
 
     url = (
@@ -267,29 +337,29 @@ async def create_opportunity_product(
 
 
 
+# @mcp.tool()
+# async def create_quote(
+#     name: str,
+#     opportunity_id: str ,
+# ) -> dict:
+#     """
+#     Create a Quote record in Dynamics 365 Sales.
+#     """
+#     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
+#     body = {
+#         "name": name,
+#         "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
+#     }
+
+#     response = await client.post(url, json=body)
+#     response.raise_for_status()
+
+#     return response.json()
+
+
+
 @mcp.tool()
 async def create_quote(
-    name: str,
-    opportunity_id: str ,
-) -> dict:
-    """
-    Create a Quote record in Dynamics 365 Sales.
-    """
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
-    body = {
-        "name": name,
-        "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
-    }
-
-    response = await client.post(url, json=body)
-    response.raise_for_status()
-
-    return response.json()
-
-
-
-@mcp.tool()
-async def create_quote_with_discount(
     name: str,
     opportunity_id: str,
     discount_percentage: float,
@@ -298,7 +368,11 @@ async def create_quote_with_discount(
 ) -> dict:
     """
     Create a Quote with discount fields in Dynamics 365 Sales.
+    name is mandatory.
     opportunity_id is mandatory.
+    discount_percentage is mandatory.
+    freight_amount is optional.
+    discount_amount is optional.
     """
 
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
@@ -310,7 +384,8 @@ async def create_quote_with_discount(
         "discountpercentage": float(discount_percentage)
     }
 
-
+    if discount_amount is not None:
+        body["discountamount"] = discount_amount
     if freight_amount is not None:
         body["freightamount"] = freight_amount
 
@@ -321,6 +396,61 @@ async def create_quote_with_discount(
 
     return response.json()
 
+
+@mcp.tool()
+async def update_quote(
+    quote_id: str,
+    discount_percentage: Optional[float]=None,
+    discount_amount: Optional[float] = None,
+    freight_amount: Optional[float] = None,
+    description: Optional[str] = None
+) -> dict:
+    """
+    Update discount-related fields on a Quote in Dynamics 365 Sales.
+
+    - quote_id,discount_percentage is mandatory
+    - All other fields are optional; only provided fields will be updated.
+    """
+
+    if not quote_id:
+        raise ValueError("quote_id is required to update a quote.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/quotes({quote_id})"
+    )
+
+    body = {
+    }
+
+    # If any field is provided, add it to update body
+    if discount_percentage is not None:
+        body["discountpercentage"] = float(discount_percentage)
+
+    if discount_amount is not None:
+        body["discountamount"] = float(discount_amount)
+
+    if freight_amount is not None:
+        body["freightamount"] = float(freight_amount)
+
+    if description is not None:
+        body["description"] = description
+
+    # No fields supplied → error
+    if not body:
+        raise ValueError(
+            "At least one field must be provided to update the quote."
+        )
+
+    response = await client.patch(url, json=body)
+    response.raise_for_status()
+
+    # Dynamics returns empty body for PATCH success → return a message
+    return {
+        "message": "Quote updated successfully",
+        "quote_id": quote_id,
+        "updated_fields": body
+    }
 
 
 @mcp.tool()
@@ -458,6 +588,7 @@ async def create_sales_order(
     response.raise_for_status()
 
     return response.json()
+
 
 
 if __name__ == "__main__":

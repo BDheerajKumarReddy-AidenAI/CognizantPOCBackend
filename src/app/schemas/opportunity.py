@@ -12,7 +12,7 @@ class OpportunityCreate(BaseModel):
     estimated_value: Optional[float] = None
     probability: Optional[int] = Field(None, ge=0, le=100)
     expected_close_date: Optional[date] = None
-    client_id: int
+    id: int
 
 
 class OpportunityUpdate(BaseModel):
