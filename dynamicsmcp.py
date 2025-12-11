@@ -87,6 +87,7 @@ async def get_opportunities() -> dict:
     Get all opportunities
     """
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
+        #   f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
@@ -277,7 +278,7 @@ async def update_opportunity(
     # Success: Dynamics returns empty body for PATCH
     return {
         "message": "Opportunity updated successfully",
-        "opportunity_id": opportunity_id,
+        "opportunityid": opportunity_id,
         "updated_fields": body
     }
 
@@ -362,7 +363,7 @@ async def create_opportunity_product(
 async def create_quote(
     name: str,
     opportunity_id: str,
-    discount_percentage: float,
+    discount_percentage: Optional[float]=None,
     discount_amount: Optional[float]=None ,
     freight_amount: Optional[float] = None,
 ) -> dict:
@@ -370,7 +371,7 @@ async def create_quote(
     Create a Quote with discount fields in Dynamics 365 Sales.
     name is mandatory.
     opportunity_id is mandatory.
-    discount_percentage is mandatory.
+    discount_percentage is optional.
     freight_amount is optional.
     discount_amount is optional.
     """
@@ -380,10 +381,10 @@ async def create_quote(
 
     body = {
         "name": name,
-        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
-        "discountpercentage": float(discount_percentage)
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
     }
-
+    if discount_percentage is not None:
+        body["discountpercentage"] = discount_percentage
     if discount_amount is not None:
         body["discountamount"] = discount_amount
     if freight_amount is not None:
@@ -448,7 +449,7 @@ async def update_quote(
     # Dynamics returns empty body for PATCH success → return a message
     return {
         "message": "Quote updated successfully",
-        "quote_id": quote_id,
+        "quoteid": quote_id,
         "updated_fields": body
     }
 

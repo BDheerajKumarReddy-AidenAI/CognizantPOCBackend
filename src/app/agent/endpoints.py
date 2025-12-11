@@ -17,6 +17,29 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+def extract_json_from_markdown(text: str) -> str:
+    """
+    Extract JSON from markdown code blocks.
+    Handles cases like:
+    - ``````
+    - ``````
+    - Plain JSON: {...}
+    """
+    # Remove markdown code blocks
+    text = text.strip()
+    
+    # Pattern 1: ``````
+    if text.startswith("```"):
+        text = text[7:]  # Remove ```json
+    # Pattern 2: ``````
+    elif text.startswith("```"):
+        text = text[3:]  # Remove ```
+    
+    # Remove trailing ```
+    if text.endswith("```"):
+        text = text[:-3]
+    
+    return text.strip()
 
 @router.post("/chat")
 async def chat(
@@ -81,6 +104,7 @@ async def chat(
                 }
                 
                 # Stream events
+                # pending_tool_output = None
                 async for event in graph.astream_events(
                     {
                         "messages": [{"role": "user", "content": request.message}],
@@ -163,7 +187,7 @@ async def chat(
                         # ---------------------------------------------------------
                         # 🔧 STEP 2 — Inject CRM URL for created Opportunity
                         # ---------------------------------------------------------
-                        if tool_name == "create_opportunity":
+                        if tool_name == "create_opportunity" or tool_name == "update_opportunity":
                             opp_id = tool_output.get("opportunityid")
                             if opp_id:
                                 crm_url = (
@@ -174,7 +198,7 @@ async def chat(
                                 )
                                 tool_output["opportunity_crm_url"] = crm_url
 
-                        if tool_name == "create_quote":
+                        if tool_name == "create_quote" or tool_name == "update_quote":
                             quote_id = tool_output.get("quoteid")
                             
                             if quote_id:
@@ -186,7 +210,9 @@ async def chat(
                                 )
                                 tool_output["quote_crm_url"] = crm_url
 
-                                
+                        # if "opportunity_crm_url" in tool_output or "quote_crm_url" in tool_output:
+                        #     pending_tool_output = tool_output
+                        #     print(f"📌 Buffered tool_output with URL: {pending_tool_output}")
                         # suggestions = []
                         # if tool_name == "get_opportunities":
                         #     suggestions = [
@@ -240,16 +266,28 @@ async def chat(
                 ai_suggestions = []
                 
                 try:
+                    # Extract JSON from markdown code blocks
+                    cleaned_response = extract_json_from_markdown(final_response)
+                    
+                    print(f"🧹 Cleaned response: {cleaned_response[:200]}...")
+                    
                     # Try to parse as JSON
-                    parsed = json.loads(final_response)
+                    parsed = json.loads(cleaned_response)
                     ai_reply = parsed.get("reply", final_response)
                     ai_suggestions = parsed.get("suggestions", [])
                     
-                    print(f"✅ Parsed AI suggestions: {ai_suggestions}")
-                except json.JSONDecodeError:
+                    print(f"✅ Parsed successfully!")
+                    print(f"📝 Reply length: {len(ai_reply)} chars")
+                    print(f"💡 Suggestions: {ai_suggestions}")
+                    
+                except json.JSONDecodeError as e:
                     # Fallback: use raw response if not valid JSON
                     ai_reply = final_response
-                    print("⚠️ LLM response was not valid JSON, using raw response")
+                    print(f"⚠️ JSON parse error: {e}")
+                    print(f"⚠️ Using raw response as fallback")
+                except Exception as e:
+                    ai_reply = final_response
+                    print(f"⚠️ Unexpected error parsing response: {e}")
                 # Save assistant response
                 await conv_service.create_message(
                     thread_id=session_id,
@@ -266,6 +304,7 @@ async def chat(
                     final_message=ai_reply,
                     session_id=session_id,
                     suggestions=ai_suggestions if ai_suggestions else None
+                    # tool_output=pending_tool_output
                 )
                 yield f"data: {final_event.model_dump_json()}\n\n"
                 
