@@ -22,6 +22,8 @@ API_VERSION = "v9.2"
 SCOPE = [os.getenv("SCOPE")]
 print(SCOPE)
  
+def filter_fields(data: dict, fields: list) -> dict:
+    return {field: data.get(field) for field in fields}
 
 class Dynamics365Auth(httpx.Auth):
     """Custom authentication handler with automatic token refresh for Dynamics 365"""
@@ -81,16 +83,64 @@ client = httpx.AsyncClient(
     }
 )
 mcp = FastMCP("dynamics365-mcp")
+
+# @mcp.tool()
+# async def get_opportunities() -> dict:
+#     """
+#     Get all opportunities
+#     """
+#     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
+#     response = await client.get(url)
+#     response.raise_for_status()
+#     full_data = response.json()
+    
+#     return response.json()
+
 @mcp.tool()
 async def get_opportunities() -> dict:
     """
-    Get all opportunities
+    Get all opportunities but return only AI-relevant fields.
     """
+
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
-        #   f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
     response = await client.get(url)
     response.raise_for_status()
-    return response.json()
+
+    raw_data = response.json().get("value", [])
+
+    cleaned_list = []
+
+    for opp in raw_data:
+        cleaned = {
+            "opportunityid": opp.get("opportunityid"),
+            "name": opp.get("name"),
+            "customer_need": opp.get("customerneed"),
+            "description": opp.get("description"),
+            "proposed_solution": opp.get("proposedsolution"),
+            "email": opp.get("emailaddress"),
+            "estimated_value": opp.get("estimatedvalue"),
+            "estimated_close_date": opp.get("estimatedclosedate"),
+            "close_probability": opp.get("closeprobability"),
+            "purchase_timeframe": opp.get("purchasetimeframe"),
+            "purchase_process": opp.get("purchaseprocess"),
+            "decision_maker": opp.get("decisionmaker"),
+            "identify_competitors": opp.get("identifycompetitors"),
+            "identify_contacts": opp.get("identifycustomercontacts"),
+            "customer_pain_points": opp.get("customerpainpoints"),
+            "current_situation": opp.get("currentsituation"),
+            "sales_stage": opp.get("salesstagecode"),
+            "state": opp.get("statecode"),
+            "status": opp.get("statuscode"),
+            "created_on": opp.get("createdon"),
+        }
+
+        cleaned_list.append(cleaned)
+
+
+    return {
+        "count": len(cleaned_list),
+        "opportunities": cleaned_list
+    }
 
 
 @mcp.tool()
@@ -107,12 +157,53 @@ async def get_leads() -> dict:
 @mcp.tool()
 async def get_accounts() -> dict:
     """
-    Get all accounts
+    Get all accounts but return only AI-relevant fields.
     """
+
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/accounts"
     response = await client.get(url)
     response.raise_for_status()
-    return response.json()
+
+    raw_data = response.json().get("value", [])
+
+    cleaned_list = []
+
+    for acc in raw_data:
+        cleaned = {
+            "accountid": acc.get("accountid"),
+            "name": acc.get("name"),
+            "description": acc.get("description"),
+            "website": acc.get("websiteurl"),
+            "email": acc.get("emailaddress1"),
+            "telephone": acc.get("telephone1"),
+            "fax": acc.get("fax"),
+
+            # Address fields (cleaned)
+            "city": acc.get("address1_city"),
+            "state": acc.get("address1_stateorprovince"),
+            "country": acc.get("address1_country"),
+            "postal_code": acc.get("address1_postalcode"),
+
+            # Business metrics
+            "revenue": acc.get("revenue"),
+            "employees": acc.get("numberofemployees"),
+            "industry": acc.get("industrycode"),
+            "open_revenue": acc.get("openrevenue"),
+
+            # Primary contact reference
+            "primary_contact_id": acc.get("_primarycontactid_value"),
+
+            # (Optional) created date for timeline sorting
+            "created_on": acc.get("createdon"),
+        }
+
+        cleaned_list.append(cleaned)
+
+    return {
+        "count": len(cleaned_list),
+        "accounts": cleaned_list
+    }
+
 
 
 @mcp.tool()
@@ -129,12 +220,59 @@ async def get_products() -> dict:
 @mcp.tool()
 async def get_quotes() -> dict:
     """
-    Get all quotes
+    Get all quotes but return only AI-relevant fields.
     """
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/quotes"
+    )
     response = await client.get(url)
     response.raise_for_status()
-    return response.json()
+
+    raw_data = response.json().get("value", [])
+
+    cleaned_list = []
+
+    for q in raw_data:
+        cleaned = {
+            "quoteid": q.get("quoteid"),
+            "name": q.get("name"),
+            "description": q.get("description"),
+            "quotenumber": q.get("quotenumber"),
+
+            # Financials
+            "totalamount": q.get("totalamount"),
+            "discountamount": q.get("discountamount"),
+            "discountpercentage": q.get("discountpercentage"),
+            "freightamount": q.get("freightamount"),
+            "totallineitemamount": q.get("totallineitemamount"),
+
+            # Status fields
+            "statuscode": q.get("statuscode"),
+            "statecode": q.get("statecode"),
+
+            # Timestamps
+            "createdon": q.get("createdon"),
+            "modifiedon": q.get("modifiedon"),
+
+            # Relationship fields
+            "opportunity_id": q.get("_opportunityid_value"),
+            "account_id": q.get("_accountid_value"),
+            "customer_id": q.get("_customerid_value"),
+
+            # Scheduling fields
+            "request_delivery_by": q.get("requestdeliveryby"),
+            "expires_on": q.get("expireson"),
+        }
+
+        cleaned_list.append(cleaned)
+
+    return {
+        "count": len(cleaned_list),
+        "quotes": cleaned_list
+    }
+
 
 
 @mcp.tool()
@@ -168,6 +306,188 @@ async def get_oprtunity_products() -> dict:
     response = await client.get(url)
     response.raise_for_status()
     return response.json()
+
+
+
+@mcp.tool()
+async def create_account(
+    name: str,
+    primary_contact_id: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    website: Optional[str] = None,
+    description: Optional[str] = None,
+    annual_revenue: Optional[float] = None,
+    number_of_employees: Optional[int] = None,
+    address_street: Optional[str] = None,
+    address_city: Optional[str] = None,
+    address_state: Optional[str] = None,
+    address_country: Optional[str] = None,
+    address_postalcode: Optional[str] = None
+) -> dict:
+    """
+    Create an Account in Dynamics 365 CRM.
+    """
+
+    if not name:
+        raise ValueError("Account 'name' is required to create an account.")
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/accounts"
+
+    body = {
+        "name": name
+    }
+
+    # --- Optional Fields ---
+    if primary_contact_id:
+        body["primarycontactid@odata.bind"] = f"/contacts({primary_contact_id})"
+
+    if email:
+        body["emailaddress1"] = email
+
+    if phone:
+        body["telephone1"] = phone
+
+    if website:
+        body["websiteurl"] = website
+
+    if description:
+        body["description"] = description
+
+    if annual_revenue is not None:
+        body["revenue"] = float(annual_revenue)
+
+    if number_of_employees is not None:
+        body["numberofemployees"] = int(number_of_employees)
+
+    # --- Address fields ---
+    if address_street:
+        body["address1_line1"] = address_street
+
+    if address_city:
+        body["address1_city"] = address_city
+
+    if address_state:
+        body["address1_stateorprovince"] = address_state
+
+    if address_country:
+        body["address1_country"] = address_country
+
+    if address_postalcode:
+        body["address1_postalcode"] = address_postalcode
+
+    # --- Execute Request ---
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+@mcp.tool()
+async def update_account(
+    account_id: str,
+    name: Optional[str] = None,
+    primary_contact_id: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    website: Optional[str] = None,
+    description: Optional[str] = None,
+    annual_revenue: Optional[float] = None,
+    number_of_employees: Optional[int] = None,
+    address_street: Optional[str] = None,
+    address_city: Optional[str] = None,
+    address_state: Optional[str] = None,
+    address_country: Optional[str] = None,
+    address_postalcode: Optional[str] = None
+) -> dict:
+    """
+    Update an existing Account in Dynamics 365 CRM.
+    """
+
+    if not account_id:
+        raise ValueError("account_id is required to update an account.")
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/accounts({account_id})"
+
+    body = {}
+
+    # --- Standard fields ---
+    if name:
+        body["name"] = name
+
+    if email:
+        body["emailaddress1"] = email
+
+    if phone:
+        body["telephone1"] = phone
+
+    if website:
+        body["websiteurl"] = website
+
+    if description:
+        body["description"] = description
+
+    # --- Lookup field ---
+    if primary_contact_id:
+        body["primarycontactid@odata.bind"] = f"/contacts({primary_contact_id})"
+
+    # --- Numeric fields ---
+    if annual_revenue is not None:
+        body["revenue"] = float(annual_revenue)
+
+    if number_of_employees is not None:
+        body["numberofemployees"] = int(number_of_employees)
+
+    # --- Address fields ---
+    if address_street:
+        body["address1_line1"] = address_street
+
+    if address_city:
+        body["address1_city"] = address_city
+
+    if address_state:
+        body["address1_stateorprovince"] = address_state
+
+    if address_country:
+        body["address1_country"] = address_country
+
+    if address_postalcode:
+        body["address1_postalcode"] = address_postalcode
+
+    # --- Execute PATCH request ---
+    response = await client.patch(url, json=body)
+    response.raise_for_status()
+
+    # PATCH returns 204 No Content → return success object
+    return {
+        "status": "success",
+        "accountid": account_id,       # <-- IMPORTANT
+        "updated_fields": body
+    }
+
+
+@mcp.tool()
+async def delete_account(account_id: str) -> dict:
+    """
+    Delete an Account from Dynamics 365 CRM.
+    """
+
+    if not account_id:
+        raise ValueError("account_id is required to delete an account.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}."
+        f"dynamics.com/api/data/v9.2/accounts({account_id})"
+    )
+
+    response = await client.delete(url)
+    response.raise_for_status()
+
+    # DELETE returns 204 No Content → return custom success message
+    return {
+        "status": "success",
+        "deleted_account_id": account_id
+    }
 
 @mcp.tool()
 async def create_opportunity(
@@ -283,6 +603,27 @@ async def update_opportunity(
     }
 
 
+@mcp.tool()
+async def delete_opportunity(opportunity_id: str) -> dict:
+    """
+    Delete an Opportunity in Dynamics 365 Sales.
+    """
+
+    if not opportunity_id:
+        raise ValueError("opportunity_id is required to delete an opportunity.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/opportunities({opportunity_id})"
+    )
+
+    response = await client.delete(url)
+    response.raise_for_status()
+
+    return {
+        "message": "Opportunity deleted successfully",
+        "opportunityid": opportunity_id
+    }
 
 
 
@@ -381,8 +722,9 @@ async def create_quote(
 
     body = {
         "name": name,
-        "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
     }
+
     if discount_percentage is not None:
         body["discountpercentage"] = discount_percentage
     if discount_amount is not None:
@@ -408,8 +750,7 @@ async def update_quote(
 ) -> dict:
     """
     Update discount-related fields on a Quote in Dynamics 365 Sales.
-
-    - quote_id,discount_percentage is mandatory
+    - quote_id is mandatory
     - All other fields are optional; only provided fields will be updated.
     """
 
@@ -421,8 +762,7 @@ async def update_quote(
         f"api/data/v9.2/quotes({quote_id})"
     )
 
-    body = {
-    }
+    body = {}
 
     # If any field is provided, add it to update body
     if discount_percentage is not None:
@@ -453,7 +793,46 @@ async def update_quote(
         "updated_fields": body
     }
 
+@mcp.tool()
+async def delete_quote(quote_id: str) -> dict:
+    """
+    Delete a Quote in Dynamics 365 Sales.
+    - quote_id is required
+    """
 
+    if not quote_id:
+        raise ValueError("quote_id is required to delete a quote.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/quotes({quote_id})"
+    )
+
+    try:
+        response = await client.delete(url)
+        response.raise_for_status()
+
+        return {
+            "message": "Quote deleted successfully",
+            "quoteid": quote_id
+        }
+
+    except httpx.HTTPStatusError as e:
+        # If quote already deleted or never existed → Dynamics returns 404 Not Found
+        if e.response.status_code == 404:
+            return {
+                "message": "Quote does not exist to delete",
+                "quoteid": quote_id
+            }
+
+        # Any other HTTP error → rethrow
+        raise e
+    except Exception as e:
+        # Non-HTTP errors
+        raise e
+
+
+# Create Lead
 @mcp.tool()
 async def create_lead(
     subject: str,
@@ -525,6 +904,7 @@ async def create_lead(
     return response.json()
 
 
+# Create Sales Order
 @mcp.tool()
 async def create_sales_order(
     name: str,

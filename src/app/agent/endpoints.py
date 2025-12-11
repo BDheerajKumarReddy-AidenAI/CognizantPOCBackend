@@ -210,9 +210,21 @@ async def chat(
                                 )
                                 tool_output["quote_crm_url"] = crm_url
 
-                        # if "opportunity_crm_url" in tool_output or "quote_crm_url" in tool_output:
-                        #     pending_tool_output = tool_output
-                        #     print(f"📌 Buffered tool_output with URL: {pending_tool_output}")
+                        if tool_name == "create_account" or tool_name == "update_account":
+                            accountid = tool_output.get("accountid")
+                            
+                            if accountid:
+                                crm_url = (
+                                    "https://orge47cb78c.crm8.dynamics.com/main.aspx?"
+                                    "appid=4c0894ba-19c9-f011-8543-7c1e523cbef1"
+                                    "&forceUCI=1&pagetype=entityrecord&etn=account&id="
+                                    + str(accountid)
+                                )
+                                tool_output["account_crm_url"] = crm_url
+
+                        
+
+                
                         # suggestions = []
                         # if tool_name == "get_opportunities":
                         #     suggestions = [
