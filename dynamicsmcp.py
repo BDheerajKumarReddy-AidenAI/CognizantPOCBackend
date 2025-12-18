@@ -1109,54 +1109,6 @@ async def create_lead(
 
 
 
-@mcp.tool()
-async def create_opportunity_product(
-    opportunity_id: str,
-    opportunity_product_name: str,
-    quantity: int,
-    uom_id: str,
-    product_id: str ,
-    price_per_unit: Optional[float] = None,
-    is_price_overridden: Optional[bool] = None,
-    manual_discount_amount: Optional[float] = None,
-    description: Optional[str] = None,
-) -> dict:
-    """
-    Create an Opportunity Product (Opportunity Line Item) in Dynamics 365.
-    - opportunity_id: ID of the parent Opportunity (mandatory)
-    - opportunity_product_name: Name of the Opportunity Product (mandatory) 
-    """
-
-    url = (
-        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
-        f"api/data/v9.2/opportunityproducts"
-    )
-
-    body = {
-        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
-        "opportunityproductname": opportunity_product_name,
-        "quantity": int(quantity),
-        "uomid@odata.bind":f"/uoms({uom_id})",
-        "productid@odata.bind":f"/products({product_id})"
-    }
-
-    # Optional pricing
-    if price_per_unit is not None:
-        body["priceperunit"] = price_per_unit
-
-    if is_price_overridden is not None:
-        body["ispriceoverridden"] = is_price_overridden
-
-    if manual_discount_amount is not None:
-        body["manualdiscountamount"] = manual_discount_amount
-
-    if description is not None:
-        body["description"] = description
-
-    response = await client.post(url, json=body)
-    response.raise_for_status()
-
-    return response.json()
 
 
 
