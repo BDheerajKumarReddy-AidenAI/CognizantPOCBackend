@@ -102,3 +102,5 @@ seed_data.py.bak
 create_test_data.py.bak
 test_*.py
 src/app/__pycache__/__init__.cpython-311.pyc
+__pycache__/
+*.pyc
