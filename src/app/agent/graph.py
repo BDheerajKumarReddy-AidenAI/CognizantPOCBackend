@@ -14,7 +14,24 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
 logger = get_logger(__name__)
-
+tools_require_user_role = {
+    "get_opportunities",
+    "get_accounts",
+    "get_quotes",
+    "get_salesorders",
+    "create_account",
+    "update_account",
+    "delete_account",
+    "create_opportunity",
+    "update_opportunity",
+    "delete_opportunity",
+    "create_quote",
+    "update_quote",
+    "delete_quote",
+    "create_sales_order",
+    "update_sales_order",
+    "delete_sales_order",
+}
 
 async def create_agent_graph(user_id: int, user_name: str, user_role: str):
     """Create the agent graph with tools and checkpointer."""
@@ -135,13 +152,13 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
         # Check if last message has tool calls
         if last_message and hasattr(last_message, "tool_calls"):
             tool_calls = last_message.tool_calls
-            
             for tool_call in tool_calls:
                 tool_name = tool_call.get("name", "")
                 tool_args = tool_call.get("args", {})
-                
-                print(f"\n🔍 Processing tool: {tool_name}")
-                print(f"📥 Tool args: {tool_args}")
+                if tool_name in tools_require_user_role and isinstance(tool_args, dict):
+                    tool_args["user_role"] = state["user_role"]
+                    tool_call["args"] = tool_args
+
         
         # Execute tools
         result = await base_tool_node.ainvoke(state)
@@ -159,8 +176,8 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
                             # Update state based on tool results
                             
                             # 1. Track created/viewed opportunity
-                            if "opportunity_id" in parsed and "opportunity_name" in parsed:
-                                state_updates["current_opportunity_id"] = parsed["opportunity_id"]
+                            if "opportunityid" in parsed and "opportunity_name" in parsed:
+                                state_updates["current_opportunity_id"] = parsed["opportunityid"]
                                 state_updates["current_opportunity_name"] = parsed["opportunity_name"]
                                 if "client_id" in parsed:
                                     state_updates["current_client_id"] = parsed["client_id"]
@@ -207,8 +224,8 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
                                 print(f"📦 Cached {len(recent_products)} products")
                             
                             # 5. Track created quote
-                            if "quote_id" in parsed and "quote_number" in parsed:
-                                state_updates["current_quote_id"] = parsed["quote_id"]
+                            if "quoteid" in parsed and "quote_number" in parsed:
+                                state_updates["current_quote_id"] = parsed["quoteid"]
                                 state_updates["last_action"] = "created_quote"
                                 print(f"💰 Created quote {parsed['quote_number']}")
                             

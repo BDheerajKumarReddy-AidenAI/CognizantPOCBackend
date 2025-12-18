@@ -5,11 +5,26 @@ import json
 from msal import ConfidentialClientApplication
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from src.app.casbin.enforcer import authorize
+
 load_dotenv()
 
 from typing import Optional
 import os
  
+def enforce(role: str, resource: str, action: str):
+    try:
+        authorize(role.lower(), resource, action)
+    except PermissionError as e:
+        # IMPORTANT: return structured info, not exception
+        return {
+            "error": "PERMISSION_DENIED",
+            "message": f"You are not allowed to {action} {resource}.",
+            "role": role.lower(),
+            "resource": resource,
+            "action": action
+        }
+
 
 CLIENT_ID = os.getenv("DYNAMICS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DYNAMICS_CLIENT_SECRET")
@@ -22,8 +37,8 @@ API_VERSION = "v9.2"
 SCOPE = [os.getenv("SCOPE")]
 print(SCOPE)
  
-def filter_fields(data: dict, fields: list) -> dict:
-    return {field: data.get(field) for field in fields}
+# def filter_fields(data: dict, fields: list) -> dict:
+#     return {field: data.get(field) for field in fields}
 
 class Dynamics365Auth(httpx.Auth):
     """Custom authentication handler with automatic token refresh for Dynamics 365"""
@@ -97,10 +112,14 @@ mcp = FastMCP("dynamics365-mcp")
 #     return response.json()
 
 @mcp.tool()
-async def get_opportunities() -> dict:
+async def get_opportunities(user_role: str) -> dict:
     """
     Get all opportunities but return only AI-relevant fields.
+    - user_role is required for authorization.
     """
+    denial = enforce(user_role, "opportunity", "read")
+    if denial:
+        return denial
 
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/opportunities"
     response = await client.get(url)
@@ -155,9 +174,13 @@ async def get_leads() -> dict:
 
 
 @mcp.tool()
-async def get_accounts() -> dict:
+async def get_accounts(user_role: str) -> dict:
+    denial = enforce(user_role, "account", "read")
+    if denial:
+        return denial
     """
     Get all accounts but return only AI-relevant fields.
+    - user_role is required for authorization.
     """
 
     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/accounts"
@@ -218,9 +241,14 @@ async def get_products() -> dict:
 
 
 @mcp.tool()
-async def get_quotes() -> dict:
+async def get_quotes(user_role: str) -> dict:
+    
+    denial = enforce(user_role, "quote", "read")
+    if denial:
+        return denial
     """
     Get all quotes but return only AI-relevant fields.
+    - user_role is required for authorization.
     """
 
     url = (
@@ -274,16 +302,79 @@ async def get_quotes() -> dict:
     }
 
 
-
 @mcp.tool()
-async def get_salesorders() -> dict:
+async def get_salesorders(user_role: str) -> dict:
     """
-    Get all salesorders
+    Get all sales orders but return only AI-relevant fields.
+    - user_role is required for authorization.
     """
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/salesorders"
+    denial = enforce(user_role, "salesorder", "read")
+    if denial:
+        return denial
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/salesorders"
+    )
     response = await client.get(url)
     response.raise_for_status()
-    return response.json()
+
+    raw_data = response.json().get("value", [])
+
+    cleaned_list = []
+
+    for so in raw_data:
+        cleaned = {
+            # Core identifiers
+            "salesorderid": so.get("salesorderid"),
+            "ordernumber": so.get("ordernumber"),
+            "name": so.get("name"),
+
+            # Financials
+            "totalamount": so.get("totalamount"),
+            "totalamountlessfreight": so.get("totalamountlessfreight"),
+            "totallineitemamount": so.get("totallineitemamount"),
+            "discountamount": so.get("discountamount"),
+            "discountpercentage": so.get("discountpercentage"),
+            "freightamount": so.get("freightamount"),
+
+            # Status
+            "statecode": so.get("statecode"),
+            "statuscode": so.get("statuscode"),
+            "ispricelocked": so.get("ispricelocked"),
+            "submitstatus": so.get("submitstatus"),
+            "submitstatusdescription": so.get("submitstatusdescription"),
+
+            # Related entities
+            "quote_id": so.get("_quoteid_value"),
+            "opportunity_id": so.get("_opportunityid_value"),
+            "customer_id": so.get("_customerid_value"),
+            "pricelevel_id": so.get("_pricelevelid_value"),
+
+            # Dates
+            "createdon": so.get("createdon"),
+            "modifiedon": so.get("modifiedon"),
+            "datefulfilled": so.get("datefulfilled"),
+            "request_delivery_by": so.get("requestdeliveryby"),
+
+            # Shipping details (clean)
+            "shipto_city": so.get("shipto_city"),
+            "shipto_state": so.get("shipto_stateorprovince"),
+            "shipto_country": so.get("shipto_country"),
+            "shipto_postalcode": so.get("shipto_postalcode"),
+
+            # Billing details (clean)
+            "billto_city": so.get("billto_city"),
+            "billto_country": so.get("billto_country"),
+        }
+
+        cleaned_list.append(cleaned)
+
+    return {
+        "count": len(cleaned_list),
+        "salesorders": cleaned_list
+    }
+
 
 
 @mcp.tool()
@@ -311,6 +402,7 @@ async def get_oprtunity_products() -> dict:
 
 @mcp.tool()
 async def create_account(
+    user_role: str,
     name: str,
     primary_contact_id: Optional[str] = None,
     email: Optional[str] = None,
@@ -327,8 +419,13 @@ async def create_account(
 ) -> dict:
     """
     Create an Account in Dynamics 365 CRM.
+    - name is required
+    - user_role is required for authorization.
+    - All other parameters are optional
     """
-
+    denial = enforce(user_role, "account", "create")
+    if denial:
+        return denial
     if not name:
         raise ValueError("Account 'name' is required to create an account.")
 
@@ -385,6 +482,7 @@ async def create_account(
 
 @mcp.tool()
 async def update_account(
+    user_role: str,
     account_id: str,
     name: Optional[str] = None,
     primary_contact_id: Optional[str] = None,
@@ -402,8 +500,13 @@ async def update_account(
 ) -> dict:
     """
     Update an existing Account in Dynamics 365 CRM.
+    - account_id is required
+    - user_role is required for authorization.
+    - All other parameters are optional (only passed fields will be updated)
     """
-
+    denial = enforce(user_role, "account", "update")
+    if denial:
+        return denial
     if not account_id:
         raise ValueError("account_id is required to update an account.")
 
@@ -467,11 +570,16 @@ async def update_account(
 
 
 @mcp.tool()
-async def delete_account(account_id: str) -> dict:
+async def delete_account(user_role: str, account_id: str) -> dict:
+
     """
     Delete an Account from Dynamics 365 CRM.
+    - account_id is required
+    - user_role is required for authorization.
     """
-
+    denial = enforce(user_role, "account", "delete")
+    if denial:
+        return denial
     if not account_id:
         raise ValueError("account_id is required to delete an account.")
 
@@ -491,6 +599,7 @@ async def delete_account(account_id: str) -> dict:
 
 @mcp.tool()
 async def create_opportunity(
+    user_role: str,
     name: str,
     account_id: str,
     customer_need: str,
@@ -502,7 +611,18 @@ async def create_opportunity(
 ) -> dict:
     """
     Create an Opportunity in Dynamics 365 Sales.
+    - name is required
+    - account_id is required
+    - customer_need is required
+    - budget_amount is required
+    - user_role is required for authorization.
+    - All other parameters are optional
     """
+    denial = enforce(user_role, "opportunity", "create")
+    print(user_role, name)
+
+    if denial:
+        return denial
     if not account_id:
         raise ValueError("account_id is required to create an opportunity.")
 
@@ -534,6 +654,7 @@ async def create_opportunity(
 
 @mcp.tool()
 async def update_opportunity(
+    user_role: str,
     opportunity_id: str,
     name: Optional[str] = None,
     customer_need: Optional[str] = None,
@@ -548,8 +669,13 @@ async def update_opportunity(
     Update fields on an existing Opportunity in Dynamics 365 Sales.
 
     - opportunity_id is required
+    - user_role is required for authorization.
     - All other parameters are optional (only passed fields will be updated)
     """
+
+    denial = enforce(user_role, "opportunity", "update")
+    if denial:
+        return denial
 
     if not opportunity_id:
         raise ValueError("opportunity_id is required to update an opportunity.")
@@ -604,11 +730,17 @@ async def update_opportunity(
 
 
 @mcp.tool()
-async def delete_opportunity(opportunity_id: str) -> dict:
+async def delete_opportunity(user_role: str, opportunity_id: str) -> dict:
     """
     Delete an Opportunity in Dynamics 365 Sales.
+    - opportunity_id is required
+    - user_role is required for authorization.
     """
 
+    denial = enforce(user_role, "opportunity", "delete")
+    if denial:
+        return denial
+    
     if not opportunity_id:
         raise ValueError("opportunity_id is required to delete an opportunity.")
 
@@ -624,6 +756,356 @@ async def delete_opportunity(opportunity_id: str) -> dict:
         "message": "Opportunity deleted successfully",
         "opportunityid": opportunity_id
     }
+
+
+
+
+@mcp.tool()
+async def create_quote(
+    user_role: str,
+    name: str,
+    opportunity_id: str,
+    discount_percentage: Optional[float]=None,
+    discount_amount: Optional[float]=None ,
+    freight_amount: Optional[float] = None,
+) -> dict:
+
+    denial = enforce(user_role, "quote", "create")
+    print(denial)
+    print(user_role, name, opportunity_id, discount_percentage, discount_amount, freight_amount)
+    if denial:
+        return denial
+    """
+    Create a Quote with discount fields in Dynamics 365 Sales.
+    - user_role is required for authorization.
+    name is mandatory.
+    opportunity_id is mandatory.
+    discount_percentage is optional.
+    freight_amount is optional.
+    discount_amount is optional.
+    """
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
+
+
+    body = {
+        "name": name,
+        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
+    }
+
+    if discount_percentage is not None:
+        body["discountpercentage"] = discount_percentage
+    if discount_amount is not None:
+        body["discountamount"] = discount_amount
+    if freight_amount is not None:
+        body["freightamount"] = freight_amount
+
+
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
+
+@mcp.tool()
+async def update_quote(
+    user_role: str,
+    quote_id: str,
+    discount_percentage: Optional[float]=None,
+    discount_amount: Optional[float] = None,
+    freight_amount: Optional[float] = None,
+    description: Optional[str] = None
+) -> dict:
+    denial = enforce(user_role, "quote", "update")
+    if denial:
+        return denial
+    """
+    Update discount-related fields on a Quote in Dynamics 365 Sales.
+    - quote_id is mandatory
+    - All other fields are optional; only provided fields will be updated.
+    - user_role is required for authorization.
+    """
+
+    if not quote_id:
+        raise ValueError("quote_id is required to update a quote.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/quotes({quote_id})"
+    )
+
+    body = {}
+
+    # If any field is provided, add it to update body
+    if discount_percentage is not None:
+        body["discountpercentage"] = float(discount_percentage)
+
+    if discount_amount is not None:
+        body["discountamount"] = float(discount_amount)
+
+    if freight_amount is not None:
+        body["freightamount"] = float(freight_amount)
+
+    if description is not None:
+        body["description"] = description
+
+    # No fields supplied → error
+    if not body:
+        raise ValueError(
+            "At least one field must be provided to update the quote."
+        )
+
+    response = await client.patch(url, json=body)
+    response.raise_for_status()
+
+    # Dynamics returns empty body for PATCH success → return a message
+    return {
+        "message": "Quote updated successfully",
+        "quoteid": quote_id,
+        "updated_fields": body
+    }
+
+@mcp.tool()
+async def delete_quote(user_role: str,quote_id: str) -> dict:
+
+    """
+    Delete a Quote in Dynamics 365 Sales.
+    - quote_id is required
+    - user_role is required for authorization.
+    """
+    denial = enforce(user_role, "quote", "delete")
+    if denial:
+        return denial
+    if not quote_id:
+        raise ValueError("quote_id is required to delete a quote.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
+        f"api/data/v9.2/quotes({quote_id})"
+    )
+
+    try:
+        response = await client.delete(url)
+        response.raise_for_status()
+
+        return {
+            "message": "Quote deleted successfully",
+            "quoteid": quote_id
+        }
+
+    except httpx.HTTPStatusError as e:
+        # If quote already deleted or never existed → Dynamics returns 404 Not Found
+        if e.response.status_code == 404:
+            return {
+                "message": "Quote does not exist to delete",
+                "quoteid": quote_id
+            }
+
+        # Any other HTTP error → rethrow
+        raise e
+    except Exception as e:
+        # Non-HTTP errors
+        raise e
+
+
+
+
+
+# Create Sales Order
+@mcp.tool()
+async def create_sales_order(
+    user_role: str,
+    name: str,
+    customer_account_id: Optional[str] = None,
+    customer_contact_id: Optional[str] = None,
+    description: Optional[str] = None,
+    request_delivery_by: Optional[str] = None,
+    payment_terms_code: Optional[int] = None,
+    freight_terms_code: Optional[int] = None
+) -> dict:
+    """
+    Create a Sales Order in Dynamics 365 CRM.
+    - user_role is required for authorization.
+    """
+    denial = enforce(user_role, "salesorder", "create")
+    if denial:
+        return denial
+    
+    if not name:
+        raise ValueError("Sales Order 'name' is required.")
+
+    # customer lookup requirement
+    if not (customer_account_id or customer_contact_id):
+        raise ValueError("Either account or contact customer must be provided.")
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/salesorders"
+
+    body = {"name": name}
+
+    # bind to account or contact (customer)
+    if customer_account_id:
+        body["customerid_account@odata.bind"] = f"/accounts({customer_account_id})"
+    if customer_contact_id:
+        body["customerid_contact@odata.bind"] = f"/contacts({customer_contact_id})"
+
+    if description:
+        body["description"] = description
+    if request_delivery_by:
+        body["requestdeliveryby"] = request_delivery_by
+    if payment_terms_code is not None:
+        body["paymenttermscode"] = payment_terms_code
+    if freight_terms_code is not None:
+        body["freighttermscode"] = freight_terms_code
+
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+    return response.json()
+
+
+#Update Sales Order
+@mcp.tool()
+async def update_sales_order(
+    user_role: str,
+    sales_order_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    request_delivery_by: Optional[str] = None,
+    payment_terms_code: Optional[int] = None,
+    freight_terms_code: Optional[int] = None
+) -> dict:
+    """
+    Update an existing Sales Order.
+    - user_role is required for authorization.
+    """
+    denial = enforce(user_role, "salesorder", "update")
+    if denial:
+        return denial
+    if not sales_order_id:
+        raise ValueError("sales_order_id is required.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}."
+        f"dynamics.com/api/data/v9.2/salesorders({sales_order_id})"
+    )
+
+    body = {}
+    if name:
+        body["name"] = name
+    if description:
+        body["description"] = description
+    if request_delivery_by:
+        body["requestdeliveryby"] = request_delivery_by
+    if payment_terms_code is not None:
+        body["paymenttermscode"] = payment_terms_code
+    if freight_terms_code is not None:
+        body["freighttermscode"] = freight_terms_code
+
+    response = await client.patch(url, json=body)
+    response.raise_for_status()
+
+    return {"status": "success", "salesorderid": sales_order_id, "updated_fields": body}
+
+
+# Delete Sales Order
+@mcp.tool()
+async def delete_sales_order(user_role: str, sales_order_id: str) -> dict:
+    """
+    Delete a Sales Order by ID.
+    - user_role is required for authorization.
+    """
+    denial = enforce(user_role, "salesorder", "delete")
+    if denial:
+        return denial
+    
+    if not sales_order_id:
+        raise ValueError("sales_order_id is required.")
+
+    url = (
+        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}."
+        f"dynamics.com/api/data/v9.2/salesorders({sales_order_id})"
+    )
+
+    response = await client.delete(url)
+    response.raise_for_status()
+
+
+    return {
+        "status": "success",
+        "salesorderid": sales_order_id
+    }
+
+# Create Lead
+@mcp.tool()
+async def create_lead(
+    subject: str,
+    firstname: Optional[str] = None,
+    lastname: Optional[str] = None,
+    email: Optional[str] = None,
+    mobilephone: Optional[str] = None,
+    companyname: Optional[str] = None,
+    jobtitle: Optional[str] = None,
+    description: Optional[str] = None,
+    parent_account_id: Optional[str] = None,
+    parent_contact_id: Optional[str] = None,
+) -> dict:
+    """
+    Create a Lead in Dynamics 365 Sales.
+    - subject is mandatory
+    - optional fields included ONLY when values are provided
+      IMPORTANT RULE
+
+        You should pass EITHER:
+        parentaccountid
+        OR
+        parentcontactid
+        Never both.
+        CRM doesn't allow a Lead to be linked to two parents simultaneously.
+    """
+
+    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/leads"
+    
+    # Mandatory field
+    body = {
+        "subject": subject
+    }
+
+    # Optional normal fields — add ONLY if provided
+    if firstname is not None:
+        body["firstname"] = firstname
+
+    if lastname is not None:
+        body["lastname"] = lastname
+
+    if email is not None:
+        body["emailaddress1"] = email
+
+    if mobilephone is not None:
+        body["mobilephone"] = mobilephone
+
+    if companyname is not None:
+        body["companyname"] = companyname
+
+    if jobtitle is not None:
+        body["jobtitle"] = jobtitle
+
+
+    if description is not None:
+        body["description"] = description
+
+    # OData bindings — optional
+    if parent_account_id is not None:
+        body["parentaccountid@odata.bind"] = f"/accounts({parent_account_id})"
+
+    if parent_contact_id is not None:
+        body["parentcontactid@odata.bind"] = f"/contacts({parent_contact_id})"
+
+    # Send request
+    response = await client.post(url, json=body)
+    response.raise_for_status()
+
+    return response.json()
+
 
 
 
@@ -676,299 +1158,6 @@ async def create_opportunity_product(
 
     return response.json()
 
-
-
-
-# @mcp.tool()
-# async def create_quote(
-#     name: str,
-#     opportunity_id: str ,
-# ) -> dict:
-#     """
-#     Create a Quote record in Dynamics 365 Sales.
-#     """
-#     url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
-#     body = {
-#         "name": name,
-#         "opportunityid@odata.bind": f"/opportunities({opportunity_id})"
-#     }
-
-#     response = await client.post(url, json=body)
-#     response.raise_for_status()
-
-#     return response.json()
-
-
-
-@mcp.tool()
-async def create_quote(
-    name: str,
-    opportunity_id: str,
-    discount_percentage: Optional[float]=None,
-    discount_amount: Optional[float]=None ,
-    freight_amount: Optional[float] = None,
-) -> dict:
-    """
-    Create a Quote with discount fields in Dynamics 365 Sales.
-    name is mandatory.
-    opportunity_id is mandatory.
-    discount_percentage is optional.
-    freight_amount is optional.
-    discount_amount is optional.
-    """
-
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/quotes"
-
-
-    body = {
-        "name": name,
-        "opportunityid@odata.bind": f"/opportunities({opportunity_id})",
-    }
-
-    if discount_percentage is not None:
-        body["discountpercentage"] = discount_percentage
-    if discount_amount is not None:
-        body["discountamount"] = discount_amount
-    if freight_amount is not None:
-        body["freightamount"] = freight_amount
-
-
-
-    response = await client.post(url, json=body)
-    response.raise_for_status()
-
-    return response.json()
-
-
-@mcp.tool()
-async def update_quote(
-    quote_id: str,
-    discount_percentage: Optional[float]=None,
-    discount_amount: Optional[float] = None,
-    freight_amount: Optional[float] = None,
-    description: Optional[str] = None
-) -> dict:
-    """
-    Update discount-related fields on a Quote in Dynamics 365 Sales.
-    - quote_id is mandatory
-    - All other fields are optional; only provided fields will be updated.
-    """
-
-    if not quote_id:
-        raise ValueError("quote_id is required to update a quote.")
-
-    url = (
-        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
-        f"api/data/v9.2/quotes({quote_id})"
-    )
-
-    body = {}
-
-    # If any field is provided, add it to update body
-    if discount_percentage is not None:
-        body["discountpercentage"] = float(discount_percentage)
-
-    if discount_amount is not None:
-        body["discountamount"] = float(discount_amount)
-
-    if freight_amount is not None:
-        body["freightamount"] = float(freight_amount)
-
-    if description is not None:
-        body["description"] = description
-
-    # No fields supplied → error
-    if not body:
-        raise ValueError(
-            "At least one field must be provided to update the quote."
-        )
-
-    response = await client.patch(url, json=body)
-    response.raise_for_status()
-
-    # Dynamics returns empty body for PATCH success → return a message
-    return {
-        "message": "Quote updated successfully",
-        "quoteid": quote_id,
-        "updated_fields": body
-    }
-
-@mcp.tool()
-async def delete_quote(quote_id: str) -> dict:
-    """
-    Delete a Quote in Dynamics 365 Sales.
-    - quote_id is required
-    """
-
-    if not quote_id:
-        raise ValueError("quote_id is required to delete a quote.")
-
-    url = (
-        f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/"
-        f"api/data/v9.2/quotes({quote_id})"
-    )
-
-    try:
-        response = await client.delete(url)
-        response.raise_for_status()
-
-        return {
-            "message": "Quote deleted successfully",
-            "quoteid": quote_id
-        }
-
-    except httpx.HTTPStatusError as e:
-        # If quote already deleted or never existed → Dynamics returns 404 Not Found
-        if e.response.status_code == 404:
-            return {
-                "message": "Quote does not exist to delete",
-                "quoteid": quote_id
-            }
-
-        # Any other HTTP error → rethrow
-        raise e
-    except Exception as e:
-        # Non-HTTP errors
-        raise e
-
-
-# Create Lead
-@mcp.tool()
-async def create_lead(
-    subject: str,
-    firstname: Optional[str] = None,
-    lastname: Optional[str] = None,
-    email: Optional[str] = None,
-    mobilephone: Optional[str] = None,
-    companyname: Optional[str] = None,
-    jobtitle: Optional[str] = None,
-    description: Optional[str] = None,
-    parent_account_id: Optional[str] = None,
-    parent_contact_id: Optional[str] = None,
-) -> dict:
-    """
-    Create a Lead in Dynamics 365 Sales.
-    - subject is mandatory
-    - optional fields included ONLY when values are provided
-      IMPORTANT RULE
-
-        You should pass EITHER:
-        parentaccountid
-        OR
-        parentcontactid
-        Never both.
-        CRM doesn't allow a Lead to be linked to two parents simultaneously.
-    """
-
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/leads"
-
-    # Mandatory field
-    body = {
-        "subject": subject
-    }
-
-    # Optional normal fields — add ONLY if provided
-    if firstname is not None:
-        body["firstname"] = firstname
-
-    if lastname is not None:
-        body["lastname"] = lastname
-
-    if email is not None:
-        body["emailaddress1"] = email
-
-    if mobilephone is not None:
-        body["mobilephone"] = mobilephone
-
-    if companyname is not None:
-        body["companyname"] = companyname
-
-    if jobtitle is not None:
-        body["jobtitle"] = jobtitle
-
-
-    if description is not None:
-        body["description"] = description
-
-    # OData bindings — optional
-    if parent_account_id is not None:
-        body["parentaccountid@odata.bind"] = f"/accounts({parent_account_id})"
-
-    if parent_contact_id is not None:
-        body["parentcontactid@odata.bind"] = f"/contacts({parent_contact_id})"
-
-    # Send request
-    response = await client.post(url, json=body)
-    response.raise_for_status()
-
-    return response.json()
-
-
-# Create Sales Order
-@mcp.tool()
-async def create_sales_order(
-    name: str,
-    price_list_id: str ,
-    is_price_locked: bool ,
-    customer_account_id: str,
-    customer_contact_id: Optional[str] = None,
-    description: Optional[str] = None,
-    bill_to_name: Optional[str] = None,
-    ship_to_name: Optional[str] = None
-) -> dict:
-    """
-    Create a Sales Order (salesorder) in Dynamics 365 Sales.
-
-    Required:
-    - name
-    - customer (account or contact)
-    - price_list_id (pricelevelid)
-    - is_price_locked
-
-    Optional:
-    - description
-    - bill_to_name
-    - ship_to_name
-    """
-
-    if not price_list_id:
-        raise ValueError("price_list_id is required to create a Sales Order.")
-
-    if not (customer_account_id or customer_contact_id):
-        raise ValueError("Either customer_account_id or customer_contact_id is required.")
-
-    url = f"https://{DYNAMICS_ORG}.{DYNAMICS_REGION}.dynamics.com/api/data/v9.2/salesorders"
-
-    body = {
-        "name": name,
-        "ispricelocked": is_price_locked
-    }
-
-    # Customer - Account OR Contact
-    if customer_account_id:
-        body["customerid_account@odata.bind"] = f"/accounts({customer_account_id})"
-
-    if customer_contact_id:
-        body["customerid_contact@odata.bind"] = f"/contacts({customer_contact_id})"
-
-    # Price List
-    body["pricelevelid@odata.bind"] = f"/pricelevels({price_list_id})"
-
-    # Optional fields
-    if description is not None:
-        body["description"] = description
-
-    if bill_to_name is not None:
-        body["billto_name"] = bill_to_name
-
-    if ship_to_name is not None:
-        body["shipto_name"] = ship_to_name
-
-    # Send request
-    response = await client.post(url, json=body)
-    response.raise_for_status()
-
-    return response.json()
 
 
 

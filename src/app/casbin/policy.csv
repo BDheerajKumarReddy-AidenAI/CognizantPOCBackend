@@ -1,0 +1,42 @@
+# =========================
+# SALES TEAM PERMISSIONS
+# =========================
+
+p, sales, lead, create
+p, sales, lead, read
+p, sales, lead, update
+p, sales, lead, delete
+
+p, sales, account, create
+p, sales, account, read
+p, sales, account, update
+p, sales, account, delete
+
+p, sales, opportunity, create
+p, sales, opportunity, read
+p, sales, opportunity, update
+p, sales, opportunity, delete
+
+p, sales, salesorder, create
+p, sales, salesorder, read
+p, sales, salesorder, update
+p, sales, salesorder, delete
+
+# Sales can ONLY read quotes
+p, sales, quote, read
+
+
+# =========================
+# PRICING TEAM PERMISSIONS
+# =========================
+
+p, pricing, quote, create
+p, pricing, quote, read
+p, pricing, quote, update
+p, pricing, quote, delete
+
+# Pricing can only read sales orders
+p, pricing, salesorder, read
+p, pricing, opportunity, read
+
+
