@@ -6,7 +6,7 @@ from msal import ConfidentialClientApplication
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from src.app.casbin.enforcer import authorize
-
+from src.app.config import settings
 load_dotenv()
 
 from typing import Optional
@@ -26,15 +26,15 @@ def enforce(role: str, resource: str, action: str):
         }
 
 
-CLIENT_ID = os.getenv("DYNAMICS_CLIENT_ID")
-CLIENT_SECRET = os.getenv("DYNAMICS_CLIENT_SECRET")
-TENANT_ID = os.getenv("DYNAMICS_TENANT_ID")
+CLIENT_ID = settings.dynamics.auth.client_id
+CLIENT_SECRET = settings.dynamics.auth.client_secret
+TENANT_ID = settings.dynamics.auth.tenant_id
 
-DYNAMICS_ORG = os.getenv("DYNAMICS_ORG")
-DYNAMICS_REGION = os.getenv("DYNAMICS_REGION")
+DYNAMICS_ORG = settings.dynamics.org
+DYNAMICS_REGION = settings.dynamics.region
 
-API_VERSION = "v9.2"
-SCOPE = [os.getenv("SCOPE")]
+API_VERSION = settings.dynamics.api_version
+SCOPE = [settings.dynamics.scope]
 print(SCOPE)
  
 # def filter_fields(data: dict, fields: list) -> dict:

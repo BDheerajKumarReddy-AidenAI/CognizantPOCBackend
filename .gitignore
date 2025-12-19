@@ -104,3 +104,4 @@ test_*.py
 src/app/__pycache__/__init__.cpython-311.pyc
 __pycache__/
 *.pyc
+settings.toml

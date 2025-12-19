@@ -13,9 +13,9 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     try:
         # Startup
-        logger.info(f"🚀 Starting {settings.project_name} v{settings.version}")
-        logger.info(f"📊 Environment: {settings.environment}")
-        logger.info(f"🤖 Agent Model: {settings.agent_model}")
+        logger.info(f"🚀 Starting {settings.app.project_name} v{settings.app.version}")
+        logger.info(f"📊 Environment: {settings.app.environment}")
+        logger.info(f"🤖 Agent Model: {settings.agent.model}")
         
         # Import here to avoid circular imports
         from app.agent.checkpointer import agent_checkpointer
@@ -50,8 +50,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app with lifespan
 app = FastAPI(
-    title=settings.project_name,
-    version=settings.version,
+    title=settings.app.project_name,
+    version=settings.app.version,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -79,8 +79,8 @@ app.include_router(agent_router)
 async def root():
     """Root endpoint."""
     return {
-        "name": settings.project_name,
-        "version": settings.version,
+        "name": settings.app.project_name,
+        "version": settings.app.version,
         "status": "running"
     }
 
@@ -90,7 +90,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "environment": settings.environment
+        "environment": settings.app.environment
     }
 
 
@@ -98,8 +98,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=settings.app.api_host,
+        port=settings.app.api_port,
         reload=True,
-        log_level="info"
+        log_level=settings.app.log_level.lower()
     )

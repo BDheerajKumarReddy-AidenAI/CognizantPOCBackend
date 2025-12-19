@@ -9,7 +9,7 @@ def setup_logging() -> None:
     
     # Configure root logger
     logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper()),
+        level=getattr(logging, settings.app.log_level.upper()),
         format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
         datefmt='%H:%M:%S',
         handlers=[

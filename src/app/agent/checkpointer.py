@@ -29,7 +29,7 @@ class AgentCheckpointer:
         logger.info("🔧 Setting up agent checkpointer...")
         
         # Clean the connection string - psycopg needs plain postgresql:// format
-        conninfo = settings.database_url
+        conninfo = settings.database.database_url
         
         # Remove any dialect suffixes
         conninfo = conninfo.replace("postgresql+asyncpg://", "postgresql://")

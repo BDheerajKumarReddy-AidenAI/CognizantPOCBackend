@@ -8,8 +8,8 @@ Base = declarative_base()
 
 # Async engine for application
 async_engine = create_async_engine(
-    settings.async_database_url,
-    echo=settings.db_echo,
+    settings.database.async_database_url,
+    echo=settings.database.echo,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20

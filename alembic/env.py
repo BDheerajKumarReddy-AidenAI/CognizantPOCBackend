@@ -22,7 +22,7 @@ from app.db import models  # noqa
 config = context.config
 
 # Set sqlalchemy.url from settings (use regular URL for Alembic)
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.database.database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
@@ -66,7 +66,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=settings.async_database_url  # Use async URL
+        url=settings.database.async_database_url  # Use async URL
     )
 
     async with connectable.connect() as connection:

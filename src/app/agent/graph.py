@@ -46,10 +46,10 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
     
     # Initialize LLM
     llm = ChatOpenAI(
-        model=settings.agent_model,
-        temperature=settings.agent_temperature,
+        model=settings.agent.model,
+        temperature=settings.agent.temperature,
         streaming=True,
-        api_key=settings.openai_api_key
+        api_key=settings.openai.api_key
     )
     
     # Get tools based on user role
@@ -66,12 +66,15 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
 
     print("🔌 Connecting to Dynamics MCP server...")
 
-    client = MultiServerMCPClient({
-        "dynamics": {
-            "url": "http://127.0.0.1:6000/mcp",
-            "transport": "streamable_http"
-        }
-    })
+    if settings.mcp.enabled:
+        client = MultiServerMCPClient({
+            "dynamics": {
+                "url": settings.mcp.url,
+                "transport": settings.mcp.transport
+            }
+        })
+    else:
+        raise ValueError("MCP is not enabled in settings.")
 
     mcp_tools = await client.get_tools()
 
