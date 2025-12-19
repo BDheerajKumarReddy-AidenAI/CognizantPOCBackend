@@ -1,0 +1,67 @@
+# ===============================
+# Application
+# ===============================
+[app]
+project_name = "CRM Sales Agent"
+version = "1.0.0"
+environment = "development"     # development | staging | production
+app_env = "development"
+api_host = "0.0.0.0"
+api_port = 8000
+log_level = "INFO"
+
+# ===============================
+# Database
+# ===============================
+[database]
+database_url = ""
+async_database_url = ""
+echo = false
+
+# ===============================
+# CORS
+# ===============================
+[cors]
+backend_origins = []   # example: ["http://localhost:3000"]
+
+
+# ===============================
+# OpenAI / LLM
+# ===============================
+[openai]
+api_key = "CHANGE_ME"
+
+
+# ===============================
+# Agent Settings
+# ===============================
+[agent]
+model = ""            # example:gpt-4o-mini
+temperature = 0
+
+
+
+# ===============================
+# Microsoft Dynamics 365 Auth
+# ===============================
+[dynamics.auth]
+client_id = "CHANGE_ME"
+client_secret = "CHANGE_ME"
+tenant_id = "CHANGE_ME"
+
+# ===============================
+# Microsoft Dynamics 365 Config
+# ===============================
+[dynamics]
+org = "your_org_name"
+region = "your_region"
+api_version = "v9.2"
+scope = "https://your_org.api.crm.dynamics.com/.default"
+
+# ===============================
+# MCP / MultiServer Client
+# ===============================
+[mcp]
+url = ""         #example : http://127.0.0.1:6000/mcp
+transport = ""   #example: "streamable_http"
+enabled = true
