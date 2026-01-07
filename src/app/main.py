@@ -69,6 +69,7 @@ app.add_middleware(
 
 # Include routers
 from app.api.v1 import api_router
+# from app.agent.endpoints import router as agent_router
 from app.agent.endpoints import router as agent_router
 
 app.include_router(api_router, prefix="/api/v1")

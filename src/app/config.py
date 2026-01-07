@@ -54,7 +54,12 @@ class DynamicsSettings(BaseModel):
     region: str = Field(..., description="Dynamics 365 region")
     api_version: str = Field("v9.2", description="API version")
     scope: str = Field(..., description="OAuth scope")
-
+    crm_url_entities: str = Field(..., description="CRM URL entities")
+    view_all_crm_url: str = Field(..., description="View all CRM URL")
+    opportunity_view_id: str = Field(..., description="Opportunity view ID")
+    quote_view_id: str = Field(..., description="Quote view ID")
+    account_view_id: str = Field(..., description="Account view ID")
+    salesorder_view_id: str = Field(..., description="Sales Order view ID")
 
 class MCPSettings(BaseModel):
     enabled: bool = Field(True, description="Enable MCP")

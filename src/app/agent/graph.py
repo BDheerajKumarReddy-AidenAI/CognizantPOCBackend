@@ -11,7 +11,8 @@ from app.agent.checkpointer import agent_checkpointer
 from app.config import settings
 from app.core.logging import get_logger
 from langchain_mcp_adapters.client import MultiServerMCPClient
-
+from app.schemas.chat import AgentResponse
+from langchain_core.tools import StructuredTool
 
 logger = get_logger(__name__)
 tools_require_user_role = {
@@ -51,6 +52,15 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
         streaming=True,
         api_key=settings.openai.api_key
     )
+    # ------------------------------
+    # Final response tool (STRICT)
+    # ------------------------------
+    agent_response_tool = StructuredTool.from_function(
+        name="agent_response",
+        description="Final structured response to the user",
+        args_schema=AgentResponse,
+        func=lambda **kwargs: kwargs,
+    )
     
     # Get tools based on user role
     # from app.db.models.user import UserRole
@@ -80,9 +90,13 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
 
     print(f"🔧 Loaded {len(mcp_tools)} Dynamics MCP tools")
 
-    llm_with_tools = llm.bind_tools(mcp_tools)
+    # Bind tools (MCP + final response)
+    llm_with_tools = llm.bind_tools(
+        mcp_tools + [agent_response_tool],
+        tool_choice="auto",
+    )
 
-    base_tool_node = ToolNode(mcp_tools)
+    base_tool_node = ToolNode(mcp_tools + [agent_response_tool])
 
     
     # Define agent node
@@ -97,16 +111,42 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
             context_additions.append(
                 f"📌 Current Context: Working on opportunity '{state.get('current_opportunity_name')}' "
                 f"(ID: {state.get('current_opportunity_id')}) "
-                f"for client '{state.get('current_client_name')}'"
+                f"for client '{state.get('current_account_name')}'"
             )
         
         if state.get("recent_opportunities"):
-            recent = state["recent_opportunities"][:3]
+            recent = state["recent_opportunities"][:10]
             opp_list = ", ".join([f"'{o['name']}'" for o in recent])
             context_additions.append(
                 f"📋 Recently Listed: {opp_list}"
             )
         
+        if state.get('recent_quotes'):
+            recent = state['recent_quotes'][:10]
+            quote_list = ", ".join([f"'{q['quote_number']}'" for q in recent])
+            context_additions.append(
+                f"📄 Recently Listed Quotes: {quote_list}"
+            )
+
+        if state.get("recent_accounts"):
+            recent = state["recent_accounts"][:10]
+            acc_list = ", ".join([f"'{a['name']}'" for a in recent])
+            context_additions.append(
+                f"🏢 Recently Listed Accounts: {acc_list}"
+            )
+        if state.get("recent_products"):
+            recent = state["recent_products"][:10]
+            prod_list = ", ".join([f"'{p['name']}'" for p in recent])
+            context_additions.append(
+                f"📦 Recently Listed Products: {prod_list}"
+            )
+        if state.get("recent_salesorders"):
+            recent = state["recent_salesorders"][:10]
+            so_list = ", ".join([f"'{s['name']}'" for s in recent])
+            context_additions.append(
+                f"🧾 Recently Listed Sales Orders: {so_list}"
+            )
+            
         if state.get("last_action"):
             context_additions.append(
                 f"🔄 Last Action: {state['last_action']}"
@@ -138,6 +178,14 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
         print(f"📨 Sending {len(messages)} messages to LLM")
         
         response = llm_with_tools.invoke(messages)
+        # 🔐 SAFETY: if model returns no tool calls, force agent_response
+        if not getattr(response, "tool_calls", None):
+            response = llm_with_tools.invoke(
+                messages + [{
+                    "role": "system",
+                    "content": "You must now call agent_response."
+                }]
+            )
         return {"messages": [response]}
     
     # Define tools node with state update capability
@@ -178,41 +226,56 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
                             
                             # Update state based on tool results
                             
-                            # 1. Track created/viewed opportunity
-                            if "opportunityid" in parsed and "opportunity_name" in parsed:
-                                state_updates["current_opportunity_id"] = parsed["opportunityid"]
-                                state_updates["current_opportunity_name"] = parsed["opportunity_name"]
-                                if "client_id" in parsed:
-                                    state_updates["current_client_id"] = parsed["client_id"]
-                                if "client_name" in parsed:
-                                    state_updates["current_client_name"] = parsed["client_name"]
-                                print(f"🎯 Updated context: Opportunity '{parsed['opportunity_name']}'")
+                           
                             
-                            # 2. Track listed opportunities
+                            # 1. Track listed opportunities
                             if "opportunities" in parsed and isinstance(parsed["opportunities"], list):
                                 recent_opps = [
                                     {
-                                        "id": opp.get("id"),
+                                        "id": opp.get("opportunityid"),
                                         "name": opp.get("name"),
-                                        "client_name": opp.get("client_name")
+                                        # "client_name": opp.get("client_name")
                                     }
-                                    for opp in parsed["opportunities"][:5]
+                                    for opp in parsed["opportunities"]
                                 ]
                                 state_updates["recent_opportunities"] = recent_opps
                                 state_updates["last_action"] = "listed_opportunities"
+                        
                                 print(f"📋 Cached {len(recent_opps)} recent opportunities")
+                                # print("State updates:",state_updates)
                             
-                            # 3. Track listed clients
-                            if "clients" in parsed and isinstance(parsed["clients"], list):
-                                recent_clients = [
-                                    {"id": c.get("id"), "name": c.get("name")}
-                                    for c in parsed["clients"][:10]
+                            # 2. Track listed accounts
+                            if "accounts" in parsed and isinstance(parsed["accounts"], list):
+                                recent_accounts = [
+                                    {
+                                     "accountid": c.get("accountid"),
+                                      "name": c.get("name")
+                                    }
+                                    for c in parsed["accounts"]
                                 ]
-                                state_updates["recent_clients"] = recent_clients
-                                state_updates["last_action"] = "listed_clients"
-                                print(f"🏢 Cached {len(recent_clients)} clients")
+                                state_updates["recent_accounts"] = recent_accounts
+                                state_updates["last_action"] = "listed_accounts"
+                                # print(parsed)
+                                print(f"🏢 Cached {len(recent_accounts)} Recent Accounts {state_updates}")
+
+
+                             # 6. Track listed quotes
+                            if "quotes" in parsed and isinstance(parsed["quotes"], list):
+                                recent_quotes = [
+                                    {
+                                        "id": quote.get("quoteid"),
+                                        "name": quote.get("name"),
+                                        "quote_number": quote.get("quotenumber"),
+                                        "opportunity_id": quote.get("_opportunityid_value"),
+                                        "account_id": quote.get("_accountid_value")
+                                    }
+                                    for quote in parsed["quotes"]
+                                ]
+                                state_updates["recent_quotes"] = recent_quotes
+                                state_updates["last_action"] = "listed_quotes"
+                                print(f"📋 Cached {len(recent_quotes)} recent quotes")
                             
-                            # 4. Track listed products
+                            # 3. Track listed products
                             if "products" in parsed and isinstance(parsed["products"], list):
                                 recent_products = [
                                     {
@@ -226,12 +289,70 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
                                 state_updates["last_action"] = "listed_products"
                                 print(f"📦 Cached {len(recent_products)} products")
                             
-                            # 5. Track created quote
-                            if "quoteid" in parsed and "quote_number" in parsed:
-                                state_updates["current_quote_id"] = parsed["quoteid"]
-                                state_updates["last_action"] = "created_quote"
-                                print(f"💰 Created quote {parsed['quote_number']}")
                             
+                            odata_context = parsed.get("@odata.context", "")
+                             # 4. Track created/viewed opportunity (SAFE)
+                            if "#opportunities" in odata_context and "opportunityid" in parsed:
+                                state_updates["current_opportunity_id"] = parsed.get("opportunityid")
+                                state_updates["current_opportunity_name"] = parsed.get("name")
+
+                                # Optional related context
+                                if parsed.get("_accountid_value"):
+                                    state_updates["current_account_id"] = parsed.get("_accountid_value")
+
+                                if parsed.get("account_name"):
+                                    state_updates["current_account_name"] = parsed.get("account_name")
+
+                                print(
+                                    f"🎯 Updated context: Opportunity "
+                                    f"'{parsed.get('name', 'Unknown')}'"
+                                )
+
+                            # 5. Create a quote
+                            if "#quotes" in odata_context and "quoteid" in parsed:
+                                state_updates["current_quote_id"] = parsed.get("quoteid")
+                                state_updates["current_quote_number"] = parsed.get("quotenumber")
+                                state_updates["last_action"] = "created_quote"
+
+                                # Optional relational context
+                                if parsed.get("_opportunityid_value"):
+                                    state_updates["current_opportunity_id"] = parsed.get("_opportunityid_value")
+
+                                if parsed.get("_accountid_value"):
+                                    state_updates["current_account_id"] = parsed.get("_accountid_value")
+
+                                print(
+                                    f"💰 Created quote "
+                                    f"{parsed.get('quotenumber', 'Unknown')}"
+                                )
+                            
+                            # 6. Create a sales order
+                            if "#salesorders" in odata_context and "salesorderid" in parsed:
+                                state_updates["current_salesorder_id"] = parsed.get("salesorderid")
+                                state_updates["current_salesorder_name"] = parsed.get("name")
+                                state_updates["current_salesorder_number"] = parsed.get("ordernumber")
+                                state_updates["last_action"] = "created_salesorder"
+                              
+                                # Optional relational context
+                                if parsed.get("_opportunityid_value"):
+                                    state_updates["current_opportunity_id"] = parsed.get("_opportunityid_value")
+
+                                if parsed.get("_quoteid_value"):
+                                    state_updates["current_quote_id"] = parsed.get("_quoteid_value")
+
+                                if parsed.get("_customerid_value"):
+                                    state_updates["current_customer_id"] = parsed.get("_customerid_value")
+
+                                if parsed.get("_accountid_value"):
+                                    state_updates["current_account_id"] = parsed.get("_accountid_value")
+
+                                print(
+                                    f"🧾 Created Sales Order "
+                                    f"{parsed.get('ordernumber', 'Unknown')}"
+                                )
+
+                           
+
                     except json.JSONDecodeError:
                         pass
                     except Exception as e:
@@ -245,22 +366,26 @@ async def create_agent_graph(user_id: int, user_name: str, user_role: str):
         
         print(f"💾 State updates: {list(state_updates.keys())}")
         
+        has_agent_response = any(
+            getattr(msg, "name", "") == "agent_response"
+            for msg in result.get("messages", [])
+        )
+
         return Command(
             update=final_updates,
-            goto="agent"
+            goto="end" if has_agent_response else "agent"
         )
     
-    # Router function to decide next step
-    def should_continue(state: AgentState) -> Literal["tools", "end"]:
-        """Determine if we should continue to tools or end."""
-        messages = state["messages"]
-        last_message = messages[-1] if messages else None
-        
-        # Check if there are tool calls
-        if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
+    # ---------------------------------------------------------
+    # Router
+    # ---------------------------------------------------------
+    def should_continue(state: AgentState):
+        last = state["messages"][-1]
+        if getattr(last, "tool_calls", None):
             return "tools"
         return "end"
-    
+
+
     # Build graph
     workflow = StateGraph(AgentState)
     

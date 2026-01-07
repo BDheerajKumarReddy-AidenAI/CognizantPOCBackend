@@ -24,13 +24,17 @@ class AgentState(TypedDict):
     # Current working context (what user is focused on)
     current_opportunity_id: Optional[int]
     current_opportunity_name: Optional[str]
-    current_client_id: Optional[int]
-    current_client_name: Optional[str]
+    current_account_id: Optional[int]
+    current_account_name: Optional[str]
     current_quote_id: Optional[int]
-    
+    current_quote_name: Optional[str]
+    current_sales_order_id: Optional[int]
+    current_sales_order_name: Optional[str]
     # Recently mentioned entities (for reference resolution)
-    recent_clients: Optional[list[dict]]
+    recent_accounts: Optional[list[dict]]
     recent_opportunities: Optional[list[dict]]
+    recent_sales_orders: Optional[list[dict]]
+    recent_quotes: Optional[list[dict]]
     recent_products: Optional[list[dict]]
     
     # Conversation intent tracking

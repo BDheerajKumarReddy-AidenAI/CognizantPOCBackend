@@ -24,6 +24,10 @@ p, sales, salesorder, delete
 
 # Sales can ONLY read quotes
 p, sales, quote, read
+p, sales, quote, win_quote
+p, sales, quote, close_quote
+p, sales, quote, quote_to_salesorder
+
 
 
 # =========================
@@ -34,6 +38,8 @@ p, pricing, quote, create
 p, pricing, quote, read
 p, pricing, quote, update
 p, pricing, quote, delete
+p, pricing, quote, activate_quote
+
 
 # Pricing can only read sales orders
 p, pricing, salesorder, read
