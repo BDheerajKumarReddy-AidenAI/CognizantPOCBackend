@@ -9,7 +9,7 @@ from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, P
 router = APIRouter()
 
 
-@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED,deprecated=True)
 async def create_product(
     data: ProductCreate,
     db: AsyncSession = Depends(get_db)
